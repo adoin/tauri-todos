@@ -1,0 +1,46 @@
+{
+  "name": "ton",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "vite",
+    "tauri:dev": "tauri dev",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "lint": "cross-env NODE_OPTIONS=--no-warnings eslint .",
+    "lint:fix": "cross-env NODE_OPTIONS=--no-warnings eslint . --fix"
+  },
+  "dependencies": {
+    "@iconify-json/carbon": "^1.2.8",
+    "@milkdown/core": "^7.6.3",
+    "@milkdown/plugin-math": "^7.5.9",
+    "@milkdown/preset-commonmark": "^7.6.3",
+    "@milkdown/theme-nord": "^7.6.3",
+    "@milkdown/vue": "^7.6.3",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-opener": "^2",
+    "@unocss/reset": "66.1.0-beta.3",
+    "katex": "^0.16.21",
+    "pinia": "^3.0.1",
+    "unocss": "66.1.0-beta.3",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.0"
+  },
+  "devDependencies": {
+    "@antfu/eslint-config": "^4.8.1",
+    "@tauri-apps/cli": "^2",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "cross-env": "^7.0.3",
+    "eslint": "^9.22.0",
+    "typescript": "~5.6.2",
+    "vite": "^6.0.3",
+    "vue-tsc": "^2.1.10"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}
