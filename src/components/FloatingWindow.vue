@@ -1,27 +1,29 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue'
-import { useAppStore } from '../store/app'
-import { getCurrentWindow } from '@tauri-apps/api/window'
+import type { PhysicalPosition, PhysicalSize } from '@tauri-apps/api/window'
 import { invoke } from '@tauri-apps/api/core'
+import { getCurrentWindow } from '@tauri-apps/api/window'
+import { onMounted, onUnmounted, ref } from 'vue'
+import { useAppStore } from '../store/app'
 
 const appStore = useAppStore()
 const isDragging = ref(false)
-const dragOffset = ref({ x: 0, y: 0 })
+// const dragOffset = ref({ x: 0, y: 0 })
 const windowElement = ref<HTMLElement>()
 const showToolbarItems = ref(false)
 
-const handleMouseEnter = () => {
+function handleMouseEnter() {
   appStore.toggleBorder(true)
 }
 
-const handleMouseLeave = () => {
+function handleMouseLeave() {
   appStore.toggleBorder(false)
 }
 
-const handleMouseDown = async (event: MouseEvent) => {
+async function handleMouseDown(event: MouseEvent) {
   // 检查是否点击在按钮上，如果是则不开始拖拽
   const button = (event.target as HTMLElement)?.closest('button')
-  if (button) return
+  if (button)
+    return
 
   isDragging.value = true
   const window = getCurrentWindow()
@@ -30,9 +32,9 @@ const handleMouseDown = async (event: MouseEvent) => {
   await window.startDragging()
 }
 
-let saveTimeout: NodeJS.Timeout | null = null
+let saveTimeout: ReturnType<typeof setTimeout> | null = null
 
-const handleMouseUp = () => {
+function handleMouseUp() {
   const wasDragging = isDragging.value
   isDragging.value = false
 
@@ -49,11 +51,11 @@ const handleMouseUp = () => {
   }
 }
 
-const openSettings = () => {
+function openSettings() {
   appStore.openSettings()
 }
 
-const saveWindowConfig = async () => {
+async function saveWindowConfig() {
   try {
     const window = getCurrentWindow()
     const position = await window.outerPosition()
@@ -64,51 +66,53 @@ const saveWindowConfig = async () => {
         x: position.x,
         y: position.y,
         width: size.width,
-        height: size.height
-      }
+        height: size.height,
+      },
     })
 
     // 更新 store 中的位置
     appStore.updateWindowPosition({ x: position.x, y: position.y })
-  } catch (error) {
+  }
+  catch (error) {
     console.error('Failed to save window config:', error)
   }
 }
 
-const loadWindowConfig = async () => {
+async function loadWindowConfig() {
   try {
     const config = await invoke('load_window_config') as any
     appStore.updateWindowPosition({ x: config.x, y: config.y })
 
     // 设置窗口位置和尺寸
     const window = getCurrentWindow()
-    
+
     // 使用 Physical 位置格式
-    await window.setPosition({ 
+    await window.setPosition({
       type: 'Physical',
-      x: Math.round(config.x), 
-      y: Math.round(config.y) 
-    })
-    
+      x: Math.round(config.x),
+      y: Math.round(config.y),
+    } as PhysicalPosition)
+
     // 使用 Physical 尺寸格式
-    await window.setSize({ 
+    await window.setSize({
       type: 'Physical',
-      width: Math.round(config.width), 
-      height: Math.round(config.height) 
-    })
-    
+      width: Math.round(config.width),
+      height: Math.round(config.height),
+    } as PhysicalSize)
+
     // 更新 store 中的窗口配置
-    appStore.updateWindowConfig({ 
-      width: config.width, 
-      height: config.height 
+    appStore.updateWindowConfig({
+      width: config.width,
+      height: config.height,
     })
-  } catch (error) {
+  }
+  catch (error) {
     console.error('Failed to load window config:', error)
   }
 }
 
 // 监听窗口尺寸变化
-const handleWindowResize = () => {
+function handleWindowResize() {
   // 延迟保存以避免频繁保存
   if (saveTimeout) {
     clearTimeout(saveTimeout)
@@ -151,7 +155,7 @@ onUnmounted(() => {
 <template>
   <div
     ref="windowElement"
-      class="floating-window"
+    class="floating-window"
     @mouseenter="handleMouseEnter"
     @mouseleave="handleMouseLeave"
     @mousedown="handleMouseDown"
@@ -166,10 +170,10 @@ onUnmounted(() => {
         <div class="toolbar-buttons" :class="{ visible: showToolbarItems }">
           <button
             class="toolbar-btn settings-btn"
-            @click="openSettings"
             title="设置"
+            @click="openSettings"
           >
-⚙️
+            ⚙️
           </button>
         </div>
       </div>
@@ -177,15 +181,19 @@ onUnmounted(() => {
       <!-- 主要内容区域 -->
       <div class="main-area">
         <div class="welcome-message">
-          <h3 class="text-lg font-semibold text-gray-800 mb-2">欢迎使用 Ton</h3>
-          <p class="text-sm text-gray-600">这是一个桌面悬浮工具</p>
+          <h3 class="text-lg font-semibold text-gray-800 mb-2">
+            欢迎使用 Ton
+          </h3>
+          <p class="text-sm text-gray-600">
+            这是一个桌面悬浮工具
+          </p>
         </div>
       </div>
     </div>
   </div>
 </template>
 
-<style scoped>
+<style scoped lang="scss">
 .floating-window {
   position: relative;
   backdrop-filter: blur(10px);
@@ -210,10 +218,12 @@ onUnmounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 0 12px;
-  background: rgba(255, 255, 255, 0.2);
-  backdrop-filter: blur(5px);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-  border-radius: 8px 8px 0 0;
+  &:hover {
+    background: rgba(255, 255, 255, 0.2);
+    backdrop-filter: blur(5px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+    border-radius: 8px 8px 0 0;
+  }
 }
 
 .drag-handle {
@@ -265,7 +275,6 @@ onUnmounted(() => {
   background: rgba(255, 255, 255, 0.5);
   transform: scale(1.05);
 }
-
 
 .main-area {
   flex: 1;
