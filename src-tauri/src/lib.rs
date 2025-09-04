@@ -82,6 +82,34 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
+            // 在启动时就设置窗口层级
+            let window = app.get_webview_window("main").unwrap();
+            
+            #[cfg(target_os = "windows")]
+            {
+                use std::ffi::c_void;
+                if let Ok(hwnd) = window.hwnd() {
+                    unsafe {
+                        let hwnd_ptr = hwnd.0 as *mut c_void;
+                        let user32 = libloading::Library::new("user32.dll").unwrap();
+                        let set_window_pos: libloading::Symbol<unsafe extern "system" fn(*mut c_void, *mut c_void, i32, i32, i32, i32, u32) -> i32> = 
+                            user32.get(b"SetWindowPos").unwrap();
+                        let set_window_long: libloading::Symbol<unsafe extern "system" fn(*mut c_void, i32, i32) -> i32> = 
+                            user32.get(b"SetWindowLongA").unwrap();
+                        let get_window_long: libloading::Symbol<unsafe extern "system" fn(*mut c_void, i32) -> i32> = 
+                            user32.get(b"GetWindowLongA").unwrap();
+                        
+                        // 设置窗口样式，使其不能获得焦点
+                        // GWL_EXSTYLE = -20, WS_EX_NOACTIVATE = 0x08000000
+                        let ex_style = get_window_long(hwnd_ptr, -20);
+                        set_window_long(hwnd_ptr, -20, ex_style | 0x08000000);
+                        
+                        // 设置窗口位置到最底层
+                        // HWND_BOTTOM = 1, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE = 0x0013
+                        set_window_pos(hwnd_ptr, 1 as *mut c_void, 0, 0, 0, 0, 0x0013);
+                    }
+                }
+            }
             let quit = MenuItem::with_id(app, "quit", "退出", true, None::<&str>)?;
             let settings = MenuItem::with_id(app, "settings", "设置", true, None::<&str>)?;
             let show = MenuItem::with_id(app, "show", "显示", true, None::<&str>)?;
