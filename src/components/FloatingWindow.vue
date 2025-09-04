@@ -18,17 +18,12 @@ const handleMouseLeave = () => {
 }
 
 const handleMouseDown = async (event: MouseEvent) => {
-  if (event.target !== windowElement.value) return
+  // 检查是否点击在按钮上，如果是则不开始拖拽
+  const button = (event.target as HTMLElement)?.closest('button')
+  if (button) return
 
   isDragging.value = true
   const window = getCurrentWindow()
-
-  // 获取鼠标相对于窗口的位置
-  const rect = windowElement.value!.getBoundingClientRect()
-  dragOffset.value = {
-    x: event.clientX - rect.left,
-    y: event.clientY - rect.top
-  }
 
   // 开始拖拽
   await window.startDragging()
@@ -37,17 +32,20 @@ const handleMouseDown = async (event: MouseEvent) => {
 let saveTimeout: NodeJS.Timeout | null = null
 
 const handleMouseUp = () => {
+  const wasDragging = isDragging.value
   isDragging.value = false
 
   // 如果正在拖拽，延迟保存位置以避免过于频繁的保存
-  if (saveTimeout) {
-    clearTimeout(saveTimeout)
-  }
+  if (wasDragging) {
+    if (saveTimeout) {
+      clearTimeout(saveTimeout)
+    }
 
-  saveTimeout = setTimeout(() => {
-    saveWindowConfig()
-    saveTimeout = null
-  }, 500)
+    saveTimeout = setTimeout(() => {
+      saveWindowConfig()
+      saveTimeout = null
+    }, 500)
+  }
 }
 
 const openSettings = () => {
@@ -81,17 +79,53 @@ const loadWindowConfig = async () => {
     const config = await invoke('load_window_config') as any
     appStore.updateWindowPosition({ x: config.x, y: config.y })
 
-    // 设置窗口位置
+    // 设置窗口位置和尺寸
     const window = getCurrentWindow()
-    await window.setPosition({ x: config.x, y: config.y })
+    
+    // 使用 Physical 位置格式
+    await window.setPosition({ 
+      type: 'Physical',
+      x: Math.round(config.x), 
+      y: Math.round(config.y) 
+    })
+    
+    // 使用 Physical 尺寸格式
+    await window.setSize({ 
+      type: 'Physical',
+      width: Math.round(config.width), 
+      height: Math.round(config.height) 
+    })
+    
+    // 更新 store 中的窗口配置
+    appStore.updateWindowConfig({ 
+      width: config.width, 
+      height: config.height 
+    })
   } catch (error) {
     console.error('Failed to load window config:', error)
   }
 }
 
+// 监听窗口尺寸变化
+const handleWindowResize = () => {
+  // 延迟保存以避免频繁保存
+  if (saveTimeout) {
+    clearTimeout(saveTimeout)
+  }
+
+  saveTimeout = setTimeout(() => {
+    saveWindowConfig()
+    saveTimeout = null
+  }, 1000) // 窗口调整时延迟更长时间
+}
+
 // 监听鼠标事件
 onMounted(async () => {
   document.addEventListener('mouseup', handleMouseUp)
+
+  // 监听窗口尺寸变化
+  const window = getCurrentWindow()
+  window.listen('tauri://resize', handleWindowResize)
 
   // 加载窗口配置
   await loadWindowConfig()
@@ -111,8 +145,7 @@ onUnmounted(() => {
 <template>
   <div
     ref="windowElement"
-    :style="appStore.windowStyle"
-    class="floating-window"
+      class="floating-window"
     @mouseenter="handleMouseEnter"
     @mouseleave="handleMouseLeave"
     @mousedown="handleMouseDown"
@@ -159,6 +192,9 @@ onUnmounted(() => {
   backdrop-filter: blur(10px);
   transition: all 0.2s ease;
   overflow: hidden;
+  border-radius: 8px;
+  width: 100vw;
+  height: 100vh;
 }
 
 .floating-content {
@@ -178,6 +214,7 @@ onUnmounted(() => {
   background: rgba(255, 255, 255, 0.2);
   backdrop-filter: blur(5px);
   border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 8px 8px 0 0;
 }
 
 .drag-handle {
@@ -231,6 +268,7 @@ onUnmounted(() => {
   align-items: center;
   justify-content: center;
   background: rgba(255, 255, 255, 0.05);
+  border-radius: 0 0 8px 8px;
 }
 
 .welcome-message {

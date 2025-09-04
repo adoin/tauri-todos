@@ -12,13 +12,15 @@
   "app": {
     "windows": [
       {
+        "label": "main",
         "title": "Ton",
-        "width": 400,
-        "height": 300,
+        "width": 576,
+        "height": 756,
         "minWidth": 300,
         "minHeight": 200,
         "transparent": true,
         "decorations": false,
+        "shadow": false,
         "alwaysOnTop": true,
         "skipTaskbar": true,
         "resizable": true,

@@ -1,0 +1,19 @@
+/* 全局样式 - 确保完全透明 */
+html, body {
+  margin: 0;
+  padding: 0;
+  background: transparent !important;
+  overflow: hidden;
+}
+
+/* 移除 WebView 默认样式 */
+body {
+  -webkit-app-region: no-drag;
+}
+
+/* 确保根元素透明 */
+#app {
+  background: transparent !important;
+  border-radius: 8px;
+  overflow: hidden;
+}

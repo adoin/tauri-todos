@@ -45,12 +45,12 @@ fn load_window_config() -> Result<WindowConfig, String> {
     let config_path = config_dir.join("window-config.json");
 
     if !config_path.exists() {
-        // Return default config if file doesn't exist
+        // Return default config if file doesn't exist - 70% screen height, 30% screen width
         return Ok(WindowConfig {
             x: 100.0,
             y: 100.0,
-            width: 400.0,
-            height: 300.0,
+            width: (1920.0 * 0.3), // 30% of typical screen width
+            height: (1080.0 * 0.7), // 70% of typical screen height
         });
     }
 

@@ -9,8 +9,8 @@ export const useAppStore = defineStore('app', () => {
 
   // 窗口配置
   const windowConfig = ref({
-    width: 400,
-    height: 300,
+    width: 576, // 30% of 1920px
+    height: 756, // 70% of 1080px
     opacity: 0.8,
     borderRadius: 8,
     borderColor: '#3b82f6',

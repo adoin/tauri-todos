@@ -18,14 +18,19 @@ import SettingsModal from './components/SettingsModal.vue'
   box-sizing: border-box;
 }
 
-html, body, #app {
+html, body {
   width: 100%;
   height: 100vh;
   overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  background: transparent;
 }
 
 #app {
+  width: 100vw;
+  height: 100vh;
   background: transparent;
+  border-radius: 8px;
+  overflow: hidden;
 }
 </style>
