@@ -11,6 +11,11 @@
     "core:window:allow-outer-size",
     "core:window:allow-set-position",
     "core:window:allow-set-size",
-    "core:event:allow-listen"
+    "core:window:allow-show",
+    "core:window:allow-hide",
+    "core:window:allow-set-focus",
+    "core:window:allow-is-visible",
+    "core:event:allow-listen",
+    "core:event:allow-emit"
   ]
 }

@@ -8,6 +8,7 @@ const appStore = useAppStore()
 const isDragging = ref(false)
 const dragOffset = ref({ x: 0, y: 0 })
 const windowElement = ref<HTMLElement>()
+const showToolbarItems = ref(false)
 
 const handleMouseEnter = () => {
   appStore.toggleBorder(true)
@@ -127,6 +128,11 @@ onMounted(async () => {
   const window = getCurrentWindow()
   window.listen('tauri://resize', handleWindowResize)
 
+  // 监听托盘设置事件
+  window.listen('open-settings', () => {
+    appStore.openSettings()
+  })
+
   // 加载窗口配置
   await loadWindowConfig()
 })
@@ -153,24 +159,17 @@ onUnmounted(() => {
     <!-- 悬浮窗口内容 -->
     <div class="floating-content">
       <!-- 顶部工具栏 -->
-      <div class="toolbar">
+      <div class="toolbar" @mouseenter="showToolbarItems = true" @mouseleave="showToolbarItems = false">
         <div class="drag-handle">
-          <span class="app-title">Ton</span>
+          <span class="app-title" :class="{ visible: showToolbarItems }">Ton</span>
         </div>
-        <div class="toolbar-buttons">
+        <div class="toolbar-buttons" :class="{ visible: showToolbarItems }">
           <button
             class="toolbar-btn settings-btn"
             @click="openSettings"
             title="设置"
           >
-            ⚙️
-          </button>
-          <button
-            class="toolbar-btn close-btn"
-            @click="() => getCurrentWindow().close()"
-            title="关闭"
-          >
-            ✕
+⚙️
           </button>
         </div>
       </div>
@@ -227,12 +226,23 @@ onUnmounted(() => {
   font-size: 16px;
   font-weight: 600;
   color: #1f2937;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.app-title.visible {
   opacity: 0.8;
 }
 
 .toolbar-buttons {
   display: flex;
   gap: 8px;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.toolbar-buttons.visible {
+  opacity: 1;
 }
 
 .toolbar-btn {
@@ -256,10 +266,6 @@ onUnmounted(() => {
   transform: scale(1.05);
 }
 
-.close-btn:hover {
-  background: rgba(239, 68, 68, 0.8);
-  color: white;
-}
 
 .main-area {
   flex: 1;
