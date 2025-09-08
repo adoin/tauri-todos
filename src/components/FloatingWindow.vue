@@ -4,13 +4,13 @@ import { invoke } from '@tauri-apps/api/core'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useAppStore } from '../store/app'
+import TodoList from './TodoList.vue'
 
 const appStore = useAppStore()
 const isDragging = ref(false)
 // const dragOffset = ref({ x: 0, y: 0 })
 const windowElement = ref<HTMLElement>()
 const showToolbarItems = ref(false)
-
 function handleMouseEnter() {
   appStore.toggleBorder(true)
 }
@@ -19,12 +19,8 @@ function handleMouseLeave() {
   appStore.toggleBorder(false)
 }
 
-async function handleMouseDown(event: MouseEvent) {
-  // 检查是否点击在按钮上，如果是则不开始拖拽
-  const button = (event.target as HTMLElement)?.closest('button')
-  if (button)
-    return
-
+async function handleMouseDown(_event: MouseEvent) {
+  // 只有在拖拽手柄上才处理拖拽，不阻止其他事件
   isDragging.value = true
   const window = getCurrentWindow()
 
@@ -137,7 +133,10 @@ onMounted(async () => {
     appStore.openSettings()
   })
 
-  // 加载窗口配置
+  // 加载应用状态（包含窗口配置）
+  await appStore.loadState()
+
+  // 加载窗口配置（位置和尺寸）
   await loadWindowConfig()
 })
 
@@ -155,21 +154,32 @@ onUnmounted(() => {
 <template>
   <div
     ref="windowElement"
-    class="floating-window"
+    class="relative backdrop-blur-10px transition-all duration-200 ease-in-out overflow-hidden rounded-lg w-screen h-screen bg-[#ffffff1a] border border-solid border-white/20"
     @mouseenter="handleMouseEnter"
     @mouseleave="handleMouseLeave"
-    @mousedown="handleMouseDown"
   >
     <!-- 悬浮窗口内容 -->
-    <div class="floating-content">
+    <div class="w-full h-full flex flex-col bg-white/10">
       <!-- 顶部工具栏 -->
-      <div class="toolbar" @mouseenter="showToolbarItems = true" @mouseleave="showToolbarItems = false">
-        <div class="drag-handle">
-          <span class="app-title" :class="{ visible: showToolbarItems }">Ton</span>
+      <div
+        class="h-10 flex items-center justify-between px-3 transition-all duration-200 ease-in-out hover:bg-white/20 hover:backdrop-blur-5px hover:border-b hover:border-white/20 hover:rounded-t-lg"
+        @mouseenter="showToolbarItems = true"
+        @mouseleave="showToolbarItems = false"
+      >
+        <div class="flex-1 cursor-move select-none" @mousedown="handleMouseDown">
+          <span
+            class="text-base font-semibold text-gray-800 transition-opacity duration-300 ease-in-out"
+            :class="showToolbarItems ? 'opacity-80' : 'opacity-0'"
+          >
+            Ton
+          </span>
         </div>
-        <div class="toolbar-buttons" :class="{ visible: showToolbarItems }">
+        <div
+          class="flex gap-2 transition-opacity duration-300 ease-in-out"
+          :class="showToolbarItems ? 'opacity-100' : 'opacity-0'"
+        >
           <button
-            class="toolbar-btn settings-btn"
+            class="w-7 h-7 border-none rounded-md bg-white/30 text-gray-700 cursor-pointer flex items-center justify-center text-sm transition-all duration-200 ease-in-out backdrop-blur-5px hover:bg-white/50 hover:scale-105"
             title="设置"
             @click="openSettings"
           >
@@ -179,127 +189,9 @@ onUnmounted(() => {
       </div>
 
       <!-- 主要内容区域 -->
-      <div class="main-area">
-        <div class="welcome-message">
-          <h3 class="text-lg font-semibold text-gray-800 mb-2">
-            欢迎使用 Ton
-          </h3>
-          <p class="text-sm text-gray-600">
-            这是一个桌面悬浮工具
-          </p>
-        </div>
+      <div class="flex-1 p-0 flex flex-col bg-white/5 rounded-b-lg overflow-hidden">
+        <TodoList />
       </div>
     </div>
   </div>
 </template>
-
-<style scoped lang="scss">
-.floating-window {
-  position: relative;
-  backdrop-filter: blur(10px);
-  transition: all 0.2s ease;
-  overflow: hidden;
-  border-radius: 8px;
-  width: 100vw;
-  height: 100vh;
-}
-
-.floating-content {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.toolbar {
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0 12px;
-  &:hover {
-    background: rgba(255, 255, 255, 0.2);
-    backdrop-filter: blur(5px);
-    border-bottom: 1px solid rgba(255, 255, 255, 0.2);
-    border-radius: 8px 8px 0 0;
-  }
-}
-
-.drag-handle {
-  flex: 1;
-  cursor: move;
-  user-select: none;
-}
-
-.app-title {
-  font-size: 16px;
-  font-weight: 600;
-  color: #1f2937;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-.app-title.visible {
-  opacity: 0.8;
-}
-
-.toolbar-buttons {
-  display: flex;
-  gap: 8px;
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-.toolbar-buttons.visible {
-  opacity: 1;
-}
-
-.toolbar-btn {
-  width: 28px;
-  height: 28px;
-  border: none;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.3);
-  color: #374151;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  transition: all 0.2s ease;
-  backdrop-filter: blur(5px);
-}
-
-.toolbar-btn:hover {
-  background: rgba(255, 255, 255, 0.5);
-  transform: scale(1.05);
-}
-
-.main-area {
-  flex: 1;
-  padding: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 0 0 8px 8px;
-}
-
-.welcome-message {
-  text-align: center;
-  color: rgba(31, 41, 55, 0.8);
-}
-
-.welcome-message h3 {
-  margin: 0 0 8px 0;
-  font-size: 18px;
-  font-weight: 600;
-}
-
-.welcome-message p {
-  margin: 0;
-  font-size: 14px;
-  opacity: 0.7;
-}
-</style>

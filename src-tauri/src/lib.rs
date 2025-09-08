@@ -4,6 +4,64 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! You've been greeted from Rust!", name)
 }
 
+#[tauri::command]
+fn save_app_state(state: Value) -> Result<(), String> {
+    let config_dir = dirs::config_dir()
+        .ok_or("Failed to get config directory")?
+        .join("Ton");
+
+    std::fs::create_dir_all(&config_dir)
+        .map_err(|e| format!("Failed to create config directory: {}", e))?;
+
+    let config_file = config_dir.join("app-state.json");
+    let json_str = serde_json::to_string_pretty(&state)
+        .map_err(|e| format!("Failed to serialize state: {}", e))?;
+
+    std::fs::write(config_file, json_str)
+        .map_err(|e| format!("Failed to write state file: {}", e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+fn load_app_state() -> Result<Value, String> {
+    let config_dir = dirs::config_dir()
+        .ok_or("Failed to get config directory")?
+        .join("Ton");
+
+    let config_file = config_dir.join("app-state.json");
+
+    if !config_file.exists() {
+        // 返回默认状态
+        return Ok(serde_json::json!({
+            "isTransparent": true,
+            "showBorder": false,
+            "isSettingsOpen": false,
+            "activeToolbar": false,
+            "windowConfig": {
+                "width": 576,
+                "height": 756,
+                "opacity": 0.8,
+                "borderRadius": 8,
+                "borderColor": "#3b82f6",
+                "borderWidth": 2
+            },
+            "windowPosition": {
+                "x": 100,
+                "y": 100
+            }
+        }));
+    }
+
+    let json_str = std::fs::read_to_string(config_file)
+        .map_err(|e| format!("Failed to read state file: {}", e))?;
+
+    let state: Value = serde_json::from_str(&json_str)
+        .map_err(|e| format!("Failed to parse state file: {}", e))?;
+
+    Ok(state)
+}
+
 use std::fs;
 use serde::{Deserialize, Serialize};
 use tauri::{
@@ -11,6 +69,7 @@ use tauri::{
     menu::{Menu, MenuItem, PredefinedMenuItem},
     Manager, Emitter,
 };
+use serde_json::Value;
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct WindowConfig {
@@ -77,6 +136,126 @@ fn hide_main_window(app: tauri::AppHandle) {
     app.get_webview_window("main").unwrap().hide().unwrap();
 }
 
+// 待办事项相关命令
+#[tauri::command]
+fn save_todos(todos: Value) -> Result<(), String> {
+    let data_dir = dirs::data_dir()
+        .ok_or("Failed to get data directory")?
+        .join("Ton")
+        .join("data");
+
+    std::fs::create_dir_all(&data_dir)
+        .map_err(|e| format!("Failed to create data directory: {}", e))?;
+
+    let todo_file = data_dir.join("todo.json");
+    let json_str = serde_json::to_string_pretty(&todos)
+        .map_err(|e| format!("Failed to serialize todos: {}", e))?;
+
+    std::fs::write(todo_file, json_str)
+        .map_err(|e| format!("Failed to write todo file: {}", e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+fn load_todos() -> Result<Value, String> {
+    let data_dir = dirs::data_dir()
+        .ok_or("Failed to get data directory")?
+        .join("Ton")
+        .join("data");
+
+    let todo_file = data_dir.join("todo.json");
+
+    if !todo_file.exists() {
+        // 返回默认的空待办事项数据
+        return Ok(serde_json::json!({
+            "todos": [],
+            "settings": {
+                "colors": {
+                    "normal": "#1f2937",
+                    "warning": "#f59e0b",
+                    "urgent": "#ef4444",
+                    "completed": "#9ca3af",
+                    "background": "#ffffff",
+                    "border": "#e5e7eb",
+                    "hover": "#f3f4f6"
+                },
+                "archiveDays": 30
+            }
+        }));
+    }
+
+    let json_str = std::fs::read_to_string(todo_file)
+        .map_err(|e| format!("Failed to read todo file: {}", e))?;
+
+    let todos: Value = serde_json::from_str(&json_str)
+        .map_err(|e| format!("Failed to parse todo file: {}", e))?;
+
+    Ok(todos)
+}
+
+#[tauri::command]
+fn save_archived_todos(archived_todos: Value) -> Result<(), String> {
+    let data_dir = dirs::data_dir()
+        .ok_or("Failed to get data directory")?
+        .join("Ton")
+        .join("data");
+
+    std::fs::create_dir_all(&data_dir)
+        .map_err(|e| format!("Failed to create data directory: {}", e))?;
+
+    let archive_file = data_dir.join("stage.json");
+    let json_str = serde_json::to_string_pretty(&archived_todos)
+        .map_err(|e| format!("Failed to serialize archived todos: {}", e))?;
+
+    std::fs::write(archive_file, json_str)
+        .map_err(|e| format!("Failed to write archive file: {}", e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+fn load_archived_todos() -> Result<Value, String> {
+    let data_dir = dirs::data_dir()
+        .ok_or("Failed to get data directory")?
+        .join("Ton")
+        .join("data");
+
+    let archive_file = data_dir.join("stage.json");
+
+    if !archive_file.exists() {
+        return Ok(serde_json::json!({
+            "todos": [],
+            "archivedAt": ""
+        }));
+    }
+
+    let json_str = std::fs::read_to_string(archive_file)
+        .map_err(|e| format!("Failed to read archive file: {}", e))?;
+
+    let archived_todos: Value = serde_json::from_str(&json_str)
+        .map_err(|e| format!("Failed to parse archive file: {}", e))?;
+
+    Ok(archived_todos)
+}
+
+#[tauri::command]
+fn clear_archived_todos() -> Result<(), String> {
+    let data_dir = dirs::data_dir()
+        .ok_or("Failed to get data directory")?
+        .join("Ton")
+        .join("data");
+
+    let archive_file = data_dir.join("stage.json");
+
+    if archive_file.exists() {
+        std::fs::remove_file(archive_file)
+            .map_err(|e| format!("Failed to clear archive file: {}", e))?;
+    }
+
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -94,15 +273,15 @@ pub fn run() {
                         let user32 = libloading::Library::new("user32.dll").unwrap();
                         let set_window_pos: libloading::Symbol<unsafe extern "system" fn(*mut c_void, *mut c_void, i32, i32, i32, i32, u32) -> i32> = 
                             user32.get(b"SetWindowPos").unwrap();
-                        let set_window_long: libloading::Symbol<unsafe extern "system" fn(*mut c_void, i32, i32) -> i32> = 
+                        let _set_window_long: libloading::Symbol<unsafe extern "system" fn(*mut c_void, i32, i32) -> i32> = 
                             user32.get(b"SetWindowLongA").unwrap();
-                        let get_window_long: libloading::Symbol<unsafe extern "system" fn(*mut c_void, i32) -> i32> = 
+                        let _get_window_long: libloading::Symbol<unsafe extern "system" fn(*mut c_void, i32) -> i32> = 
                             user32.get(b"GetWindowLongA").unwrap();
                         
-                        // 设置窗口样式，使其不能获得焦点
+                        // 设置窗口样式，使其不能获得焦点 - 注释掉以允许输入框获得焦点
                         // GWL_EXSTYLE = -20, WS_EX_NOACTIVATE = 0x08000000
-                        let ex_style = get_window_long(hwnd_ptr, -20);
-                        set_window_long(hwnd_ptr, -20, ex_style | 0x08000000);
+                        // let ex_style = get_window_long(hwnd_ptr, -20);
+                        // set_window_long(hwnd_ptr, -20, ex_style | 0x08000000);
                         
                         // 设置窗口位置到最底层
                         // HWND_BOTTOM = 1, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE = 0x0013
@@ -175,15 +354,15 @@ pub fn run() {
                                                             let user32 = libloading::Library::new("user32.dll").unwrap();
                                                             let set_window_pos: libloading::Symbol<unsafe extern "system" fn(*mut c_void, *mut c_void, i32, i32, i32, i32, u32) -> i32> = 
                                                                 user32.get(b"SetWindowPos").unwrap();
-                                                            let set_window_long: libloading::Symbol<unsafe extern "system" fn(*mut c_void, i32, i32) -> i32> = 
+                                                            let _set_window_long: libloading::Symbol<unsafe extern "system" fn(*mut c_void, i32, i32) -> i32> = 
                                                                 user32.get(b"SetWindowLongA").unwrap();
-                                                            let get_window_long: libloading::Symbol<unsafe extern "system" fn(*mut c_void, i32) -> i32> = 
+                                                            let _get_window_long: libloading::Symbol<unsafe extern "system" fn(*mut c_void, i32) -> i32> = 
                                                                 user32.get(b"GetWindowLongA").unwrap();
                                                             
-                                                            // 设置窗口样式，使其不能获得焦点
+                                                            // 设置窗口样式，使其不能获得焦点 - 注释掉以允许输入框获得焦点
                                                             // GWL_EXSTYLE = -20, WS_EX_NOACTIVATE = 0x08000000
-                                                            let ex_style = get_window_long(hwnd_ptr, -20);
-                                                            set_window_long(hwnd_ptr, -20, ex_style | 0x08000000);
+                                                            // let ex_style = get_window_long(hwnd_ptr, -20);
+                                                            // set_window_long(hwnd_ptr, -20, ex_style | 0x08000000);
                                                             
                                                             // 设置窗口位置到最底层
                                                             // HWND_BOTTOM = 1, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE = 0x0013
@@ -199,7 +378,7 @@ pub fn run() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![greet, save_window_config, load_window_config, show_main_window, hide_main_window])
+        .invoke_handler(tauri::generate_handler![greet, save_window_config, load_window_config, show_main_window, hide_main_window, save_app_state, load_app_state, save_todos, load_todos, save_archived_todos, load_archived_todos, clear_archived_todos])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

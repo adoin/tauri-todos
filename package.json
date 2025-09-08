@@ -13,6 +13,7 @@
     "lint:fix": "cross-env NODE_OPTIONS=--no-warnings eslint . --fix"
   },
   "dependencies": {
+    "@element-plus/icons-vue": "^2.3.2",
     "@iconify-json/carbon": "^1.2.8",
     "@milkdown/core": "^7.6.3",
     "@milkdown/plugin-math": "^7.5.9",
@@ -22,6 +23,7 @@
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-opener": "^2",
     "@unocss/reset": "66.1.0-beta.3",
+    "element-plus": "^2.11.1",
     "katex": "^0.16.21",
     "pinia": "^3.0.1",
     "unocss": "66.1.0-beta.3",
@@ -37,6 +39,7 @@
     "sass": "^1.92.0",
     "typescript": "~5.6.2",
     "vite": "^6.0.3",
+    "vite-plugin-vue-devtools": "^8.0.1",
     "vue-tsc": "^2.1.10"
   },
   "pnpm": {

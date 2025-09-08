@@ -17,3 +17,43 @@ body {
   border-radius: 8px;
   overflow: hidden;
 }
+
+/* 自定义滑块样式 */
+.opacity-slider,
+.radius-slider,
+.border-slider,
+.archive-slider {
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.opacity-slider::-webkit-slider-thumb,
+.radius-slider::-webkit-slider-thumb,
+.border-slider::-webkit-slider-thumb,
+.archive-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #3b82f6;
+  cursor: pointer;
+  border: 2px solid white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* 复选框样式 */
+input[type="checkbox"] {
+  display: none;
+}
+
+input[type="checkbox"]:checked + span::after {
+  content: '✓';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  color: white;
+  font-size: 12px;
+  font-weight: bold;
+}

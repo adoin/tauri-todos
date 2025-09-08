@@ -2,6 +2,7 @@ import type { UserConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import UnoCSS from 'unocss/vite'
 import { defineConfig } from 'vite'
+import vueDevTools from 'vite-plugin-vue-devtools'
 import unoConfig from './uno.config'
 
 // Get the host from environment variables
@@ -13,6 +14,9 @@ export default defineConfig(async (): Promise<UserConfig> => ({
   plugins: [
     vue(),
     UnoCSS(unoConfig),
+    vueDevTools({
+      launchEditor: 'cursor',
+    }),
   ],
 
   // Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
