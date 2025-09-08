@@ -1,5 +1,6 @@
 import type { ArchivedTodoData, TodoItem, TodoSettings } from '../types/todo'
 import { invoke } from '@tauri-apps/api/core'
+import { ElMessage } from 'element-plus'
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import { defaultTodoSettings } from '../constants/todo'
@@ -305,6 +306,69 @@ export const useTodoStore = defineStore('todo', () => {
     }, 5000) // 5秒后检查归档
   }
 
+  // 导出待办数据
+  const exportTodos = () => {
+    const exportData = {
+      todos: todos.value,
+      exportedAt: new Date().toISOString(),
+      version: '1.0',
+    }
+
+    const dataStr = JSON.stringify(exportData, null, 2)
+    const dataBlob = new Blob([dataStr], { type: 'application/json' })
+    const url = URL.createObjectURL(dataBlob)
+
+    const link = document.createElement('a')
+    link.href = url
+    link.download = `todos-backup-${new Date().toISOString().split('T')[0]}.json`
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+    URL.revokeObjectURL(url)
+
+    ElMessage.success('待办数据导出成功')
+  }
+
+  // 导入待办数据
+  const importTodos = async (file: File) => {
+    try {
+      const text = await file.text()
+      const importData = JSON.parse(text)
+
+      // 验证数据格式
+      if (!importData.todos || !Array.isArray(importData.todos)) {
+        throw new Error('无效的数据格式')
+      }
+
+      const confirmMessage = `确认导入 ${importData.todos.length} 个待办事项？这将覆盖当前所有数据。`
+      const confirmed = await $confirm(confirmMessage)
+
+      if (confirmed) {
+        // 备份当前数据
+        const currentData = [...todos.value]
+
+        try {
+          // 导入新数据（只导入待办事项，不覆盖设置）
+          todos.value = importData.todos
+
+          // 保存到文件
+          await saveTodos()
+
+          ElMessage.success('待办数据导入成功')
+        }
+        catch (error) {
+          // 恢复备份数据
+          todos.value = currentData
+          throw error
+        }
+      }
+    }
+    catch (error) {
+      console.error('导入失败:', error)
+      ElMessage.error(`导入失败: ${error instanceof Error ? error.message : '未知错误'}`)
+    }
+  }
+
   // 监听待办事项变化
   watch(todos, scheduleArchiveCheck, { deep: true })
 
@@ -334,5 +398,7 @@ export const useTodoStore = defineStore('todo', () => {
     clearArchivedTodos,
     getTodoTimeStatus,
     getTodoColor,
+    exportTodos,
+    importTodos,
   }
 })
