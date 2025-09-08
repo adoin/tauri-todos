@@ -46,14 +46,3 @@ body {
 input[type="checkbox"] {
   display: none;
 }
-
-input[type="checkbox"]:checked + span::after {
-  content: '✓';
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  color: white;
-  font-size: 12px;
-  font-weight: bold;
-}

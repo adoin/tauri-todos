@@ -1,7 +1,7 @@
 import type { ArchivedTodoData, TodoItem, TodoSettings } from '../types/todo'
 import { invoke } from '@tauri-apps/api/core'
 import { save } from '@tauri-apps/plugin-dialog'
-import { writeTextFile } from '@tauri-apps/plugin-fs'
+import { writeFile } from '@tauri-apps/plugin-fs'
 import { ElMessage } from 'element-plus'
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
@@ -129,34 +129,81 @@ export const useTodoStore = defineStore('todo', () => {
     const now = new Date().toISOString()
     const completed = !todo.completed
 
-    // 如果是父项，需要确认是否同时操作子项
+    // 如果是父项，需要根据子项状态决定操作逻辑
     const children = todos.value.filter(t => t.parentId === id)
     if (children.length > 0) {
-      // 检查子项是否全部为完成状态
       const allChildrenCompleted = children.every(child => child.completed)
       const allChildrenIncomplete = children.every(child => !child.completed)
 
-      // 只有当子项不全为完成状态时才弹出确认对话框
-      if (completed && !allChildrenCompleted) {
-        const confirmMessage = `确认将"${todo.text}"及其${children.length}个子项标记为完成？`
-        await $confirm(confirmMessage)
+      if (completed) {
+        // 勾选父项（标记为完成）
+        if (!allChildrenCompleted) {
+          // 存在未完成的子项，提示是否完成所有子项
+          const confirmMessage = `确认将"${todo.text}"及其${children.length}个子项标记为完成？`
+          try {
+            await $confirm(confirmMessage)
+            // 用户点击"确定"，同时完成父项和所有子项
+            await updateTodo(id, {
+              completed,
+              completedAt: now,
+            })
+            for (const child of children) {
+              await updateTodo(child.id, {
+                completed: true,
+                completedAt: now,
+              })
+            }
+          }
+          catch {
+            // 用户点击"取消"，只更新父项为完成
+            await updateTodo(id, {
+              completed,
+              completedAt: now,
+            })
+          }
+        }
+        else {
+          // 所有子项都已完成，直接完成父项
+          await updateTodo(id, {
+            completed,
+            completedAt: now,
+          })
+        }
       }
-      else if (!completed && !allChildrenIncomplete) {
-        const confirmMessage = `确认将"${todo.text}"及其${children.length}个子项标记为未完成？`
-        await $confirm(confirmMessage)
-      }
-
-      // 更新父项和所有子项
-      await updateTodo(id, {
-        completed,
-        completedAt: completed ? now : undefined,
-      })
-
-      for (const child of children) {
-        await updateTodo(child.id, {
-          completed,
-          completedAt: completed ? now : undefined,
-        })
+      else {
+        // 取消勾选父项（标记为未完成）
+        if (allChildrenCompleted) {
+          // 所有子项都已完成，提示是否取消完成所有子项
+          const confirmMessage = `确认将"${todo.text}"及其${children.length}个子项标记为未完成？`
+          try {
+            await $confirm(confirmMessage)
+            // 用户点击"确定"，同时取消完成父项和所有子项
+            await updateTodo(id, {
+              completed,
+              completedAt: undefined,
+            })
+            for (const child of children) {
+              await updateTodo(child.id, {
+                completed: false,
+                completedAt: undefined,
+              })
+            }
+          }
+          catch {
+            // 用户点击"取消"，只取消完成父项
+            await updateTodo(id, {
+              completed,
+              completedAt: undefined,
+            })
+          }
+        }
+        else {
+          // 子项没有都选中，直接取消完成父项
+          await updateTodo(id, {
+            completed,
+            completedAt: undefined,
+          })
+        }
       }
     }
     else {
@@ -311,6 +358,8 @@ export const useTodoStore = defineStore('todo', () => {
   // 导出待办数据
   const exportTodos = async () => {
     try {
+      console.log('开始导出待办数据...')
+
       const exportData = {
         todos: todos.value,
         exportedAt: new Date().toISOString(),
@@ -318,14 +367,17 @@ export const useTodoStore = defineStore('todo', () => {
       }
 
       const dataStr = JSON.stringify(exportData, null, 2)
+      console.log('数据准备完成，大小:', dataStr.length, '字符')
 
       // 生成默认文件名（包含日期时间）
       const now = new Date()
       const dateStr = now.toISOString().split('T')[0] // YYYY-MM-DD
       const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-') // HH-MM-SS
       const defaultFileName = `todos-backup-${dateStr}-${timeStr}.json`
+      console.log('默认文件名:', defaultFileName)
 
       // 使用Tauri的save dialog
+      console.log('打开保存对话框...')
       const filePath = await save({
         defaultPath: defaultFileName,
         filters: [
@@ -336,16 +388,40 @@ export const useTodoStore = defineStore('todo', () => {
         ],
       })
 
+      console.log('用户选择的文件路径:', filePath)
+
       if (filePath) {
+        console.log('开始写入文件到:', filePath)
         // 使用Tauri的fs插件写入文件
-        await writeTextFile(filePath, dataStr)
+        const encoder = new TextEncoder()
+        const dataBytes = encoder.encode(dataStr)
+        await writeFile(filePath, dataBytes)
+        console.log('文件写入成功')
         ElMessage.success(`待办数据导出成功: ${filePath}`)
-      } else {
+      }
+      else {
+        console.log('用户取消了保存')
         ElMessage.info('导出已取消')
       }
-    } catch (error) {
-      console.error('导出失败:', error)
-      ElMessage.error(`导出失败: ${error instanceof Error ? error.message : '未知错误'}`)
+    }
+    catch (error) {
+      console.error('导出失败详细错误:', error)
+      console.error('错误类型:', typeof error)
+      console.error('错误构造函数:', error?.constructor?.name)
+
+      let errorMessage = '未知错误'
+      if (error instanceof Error) {
+        errorMessage = error.message
+        console.error('错误堆栈:', error.stack)
+      }
+      else if (typeof error === 'string') {
+        errorMessage = error
+      }
+      else if (error && typeof error === 'object') {
+        errorMessage = JSON.stringify(error)
+      }
+
+      ElMessage.error(`导出失败: ${errorMessage}`)
     }
   }
 
