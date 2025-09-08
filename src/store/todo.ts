@@ -1,4 +1,4 @@
-import type { ArchivedTodoData, TodoItem, TodoSettings } from '../types/todo'
+import type { ArchivedTodoData, TodoData, TodoItem, TodoSettings } from '../types/todo'
 import { invoke } from '@tauri-apps/api/core'
 import { save } from '@tauri-apps/plugin-dialog'
 import { writeFile } from '@tauri-apps/plugin-fs'
@@ -11,19 +11,23 @@ import { timeUtils } from '../utils/time'
 
 export const useTodoStore = defineStore('todo', () => {
   // 状态
-  const todos = ref<TodoItem[]>([])
+  const todos = ref<TodoData>({
+    data: [],
+    lastUpdate: new Date().toISOString(),
+    source: 'manual',
+  })
   const settings = ref<TodoSettings>({ ...defaultTodoSettings })
   const loading = ref(false)
   const error = ref<string | null>(null)
 
   // 计算属性
   const rootTodos = computed(() => {
-    return todos.value.filter(todo => !todo.parentId)
+    return todos.value.data.filter(todo => !todo.parentId)
   })
 
   const todoTree = computed(() => {
     const buildTree = (parentId?: string): TodoItem[] => {
-      return todos.value
+      return (todos.value?.data ?? [])
         .filter(todo => todo.parentId === parentId)
         .map(todo => ({
           ...todo,
@@ -69,8 +73,28 @@ export const useTodoStore = defineStore('todo', () => {
   const loadTodos = async () => {
     try {
       loading.value = true
-      const todosData = await invoke('load_todos') as TodoItem[]
-      todos.value = todosData || []
+      const todosData = await invoke('load_todos') as TodoData
+      if (todosData) {
+        todos.value = todosData
+      }
+      else {
+        // 兼容旧格式，如果是数组则转换为新格式
+        const oldData = await invoke('load_todos') as TodoItem[]
+        if (Array.isArray(oldData)) {
+          todos.value = {
+            data: oldData,
+            lastUpdate: new Date().toISOString(),
+            source: 'manual',
+          }
+        }
+        else {
+          todos.value = {
+            data: [],
+            lastUpdate: new Date().toISOString(),
+            source: 'manual',
+          }
+        }
+      }
       error.value = null
     }
     catch (err) {
@@ -106,23 +130,27 @@ export const useTodoStore = defineStore('todo', () => {
       parentId,
     }
 
-    todos.value.push(newTodo)
+    todos.value.data.push(newTodo)
+    todos.value.lastUpdate = new Date().toISOString()
+    todos.value.source = 'manual'
     await saveTodos()
     return newTodo
   }
 
   // 更新待办事项
   const updateTodo = async (id: string, updates: Partial<TodoItem>) => {
-    const index = todos.value.findIndex(todo => todo.id === id)
+    const index = todos.value.data.findIndex(todo => todo.id === id)
     if (index !== -1) {
-      todos.value[index] = { ...todos.value[index], ...updates }
+      todos.value.data[index] = { ...todos.value.data[index], ...updates }
+      todos.value.lastUpdate = new Date().toISOString()
+      todos.value.source = 'manual'
       await saveTodos()
     }
   }
 
   // 切换完成状态
   const toggleTodo = async (id: string) => {
-    const todo = todos.value.find(t => t.id === id)
+    const todo = todos.value.data.find(t => t.id === id)
     if (!todo)
       return
 
@@ -130,10 +158,9 @@ export const useTodoStore = defineStore('todo', () => {
     const completed = !todo.completed
 
     // 如果是父项，需要根据子项状态决定操作逻辑
-    const children = todos.value.filter(t => t.parentId === id)
+    const children = todos.value.data.filter(t => t.parentId === id)
     if (children.length > 0) {
       const allChildrenCompleted = children.every(child => child.completed)
-      const allChildrenIncomplete = children.every(child => !child.completed)
 
       if (completed) {
         // 勾选父项（标记为完成）
@@ -215,9 +242,9 @@ export const useTodoStore = defineStore('todo', () => {
 
       // 如果是子项且标记为完成，检查是否应该自动完成父项
       if (todo.parentId && completed) {
-        const parent = todos.value.find(t => t.id === todo.parentId)
+        const parent = todos.value.data.find(t => t.id === todo.parentId)
         if (parent && !parent.completed) {
-          const siblings = todos.value.filter(t => t.parentId === todo.parentId)
+          const siblings = todos.value.data.filter(t => t.parentId === todo.parentId)
           const allSiblingsCompleted = siblings.every(sibling => sibling.completed)
 
           if (allSiblingsCompleted) {
@@ -238,28 +265,28 @@ export const useTodoStore = defineStore('todo', () => {
 
   // 删除待办事项
   const deleteTodo = async (id: string) => {
-    const todo = todos.value.find(t => t.id === id)
+    const todo = todos.value.data.find(t => t.id === id)
     if (!todo)
       return
 
     // 如果是父项，需要确认是否同时删除子项
-    const children = todos.value.filter(t => t.parentId === id)
+    const children = todos.value.data.filter(t => t.parentId === id)
     if (children.length > 0) {
       const confirmMessage = `确认删除"${todo.text}"及其${children.length}个子项？`
       await $confirm(confirmMessage)
       // 删除所有子项
       for (const child of children) {
-        const childIndex = todos.value.findIndex(t => t.id === child.id)
+        const childIndex = todos.value.data.findIndex(t => t.id === child.id)
         if (childIndex !== -1) {
-          todos.value.splice(childIndex, 1)
+          todos.value.data.splice(childIndex, 1)
         }
       }
     }
 
     // 删除主项
-    const index = todos.value.findIndex(t => t.id === id)
+    const index = todos.value.data.findIndex(t => t.id === id)
     if (index !== -1) {
-      todos.value.splice(index, 1)
+      todos.value.data.splice(index, 1)
       await saveTodos()
     }
   }
@@ -276,9 +303,15 @@ export const useTodoStore = defineStore('todo', () => {
     await saveSettings()
   }
 
+  // 设置数据来源
+  const setDataSource = (source: 'manual' | 'import' | 'sync') => {
+    todos.value.source = source
+    todos.value.lastUpdate = new Date().toISOString()
+  }
+
   // 归档已完成的待办事项
   const archiveCompletedTodos = async () => {
-    const completedTodos = todos.value.filter((todo) => {
+    const completedTodos = todos.value.data.filter((todo) => {
       return todo.completed
         && todo.completedAt
         && timeUtils.shouldArchive(todo.completedAt, settings.value.archiveDays)
@@ -300,7 +333,9 @@ export const useTodoStore = defineStore('todo', () => {
 
       // 从当前待办事项中移除已归档的项目
       const archivedIds = new Set(completedTodos.map(t => t.id))
-      todos.value = todos.value.filter(todo => !archivedIds.has(todo.id))
+      todos.value.data = todos.value.data.filter(todo => !archivedIds.has(todo.id))
+      todos.value.lastUpdate = new Date().toISOString()
+      todos.value.source = 'manual'
 
       await saveTodos()
 
@@ -361,7 +396,7 @@ export const useTodoStore = defineStore('todo', () => {
       console.log('开始导出待办数据...')
 
       const exportData = {
-        todos: todos.value,
+        todos: todos.value.data,
         exportedAt: new Date().toISOString(),
         version: '1.0',
       }
@@ -441,11 +476,15 @@ export const useTodoStore = defineStore('todo', () => {
 
       if (confirmed) {
         // 备份当前数据
-        const currentData = [...todos.value]
+        const currentData = { ...todos.value }
 
         try {
           // 导入新数据（只导入待办事项，不覆盖设置）
-          todos.value = importData.todos
+          todos.value = {
+            data: importData.todos,
+            lastUpdate: new Date().toISOString(),
+            source: 'import',
+          }
 
           // 保存到文件
           await saveTodos()
@@ -496,5 +535,6 @@ export const useTodoStore = defineStore('todo', () => {
     getTodoColor,
     exportTodos,
     importTodos,
+    setDataSource,
   }
 })

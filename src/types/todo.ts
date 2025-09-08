@@ -25,6 +25,12 @@ export interface TodoSettings {
   archiveDays: number
 }
 
+export interface TodoData {
+  data: TodoItem[]
+  lastUpdate: string
+  source: 'manual' | 'import' | 'sync'
+}
+
 export interface ArchivedTodoData {
   todos: TodoItem[]
   archivedAt: string
