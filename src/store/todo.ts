@@ -1,5 +1,7 @@
 import type { ArchivedTodoData, TodoItem, TodoSettings } from '../types/todo'
 import { invoke } from '@tauri-apps/api/core'
+import { save } from '@tauri-apps/plugin-dialog'
+import { writeTextFile } from '@tauri-apps/plugin-fs'
 import { ElMessage } from 'element-plus'
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
@@ -307,26 +309,44 @@ export const useTodoStore = defineStore('todo', () => {
   }
 
   // 导出待办数据
-  const exportTodos = () => {
-    const exportData = {
-      todos: todos.value,
-      exportedAt: new Date().toISOString(),
-      version: '1.0',
+  const exportTodos = async () => {
+    try {
+      const exportData = {
+        todos: todos.value,
+        exportedAt: new Date().toISOString(),
+        version: '1.0',
+      }
+
+      const dataStr = JSON.stringify(exportData, null, 2)
+
+      // 生成默认文件名（包含日期时间）
+      const now = new Date()
+      const dateStr = now.toISOString().split('T')[0] // YYYY-MM-DD
+      const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-') // HH-MM-SS
+      const defaultFileName = `todos-backup-${dateStr}-${timeStr}.json`
+
+      // 使用Tauri的save dialog
+      const filePath = await save({
+        defaultPath: defaultFileName,
+        filters: [
+          {
+            name: 'JSON Files',
+            extensions: ['json'],
+          },
+        ],
+      })
+
+      if (filePath) {
+        // 使用Tauri的fs插件写入文件
+        await writeTextFile(filePath, dataStr)
+        ElMessage.success(`待办数据导出成功: ${filePath}`)
+      } else {
+        ElMessage.info('导出已取消')
+      }
+    } catch (error) {
+      console.error('导出失败:', error)
+      ElMessage.error(`导出失败: ${error instanceof Error ? error.message : '未知错误'}`)
     }
-
-    const dataStr = JSON.stringify(exportData, null, 2)
-    const dataBlob = new Blob([dataStr], { type: 'application/json' })
-    const url = URL.createObjectURL(dataBlob)
-
-    const link = document.createElement('a')
-    link.href = url
-    link.download = `todos-backup-${new Date().toISOString().split('T')[0]}.json`
-    document.body.appendChild(link)
-    link.click()
-    document.body.removeChild(link)
-    URL.revokeObjectURL(url)
-
-    ElMessage.success('待办数据导出成功')
   }
 
   // 导入待办数据

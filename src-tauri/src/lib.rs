@@ -62,14 +62,14 @@ fn load_app_state() -> Result<Value, String> {
     Ok(state)
 }
 
-use std::fs;
 use serde::{Deserialize, Serialize};
-use tauri::{
-    tray::{TrayIconBuilder, TrayIconEvent},
-    menu::{Menu, MenuItem, PredefinedMenuItem},
-    Manager, Emitter,
-};
 use serde_json::Value;
+use std::fs;
+use tauri::{
+    menu::{Menu, MenuItem, PredefinedMenuItem},
+    tray::{TrayIconBuilder, TrayIconEvent},
+    Emitter, Manager,
+};
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct WindowConfig {
@@ -86,15 +86,15 @@ fn save_window_config(config: WindowConfig) -> Result<(), String> {
         .join("ton");
 
     if !config_dir.exists() {
-        fs::create_dir_all(&config_dir).map_err(|e| format!("Failed to create config directory: {}", e))?;
+        fs::create_dir_all(&config_dir)
+            .map_err(|e| format!("Failed to create config directory: {}", e))?;
     }
 
     let config_path = config_dir.join("window-config.json");
     let json = serde_json::to_string_pretty(&config)
         .map_err(|e| format!("Failed to serialize config: {}", e))?;
 
-    fs::write(&config_path, json)
-        .map_err(|e| format!("Failed to write config file: {}", e))?;
+    fs::write(&config_path, json).map_err(|e| format!("Failed to write config file: {}", e))?;
 
     Ok(())
 }
@@ -112,7 +112,7 @@ fn load_window_config() -> Result<WindowConfig, String> {
         return Ok(WindowConfig {
             x: 100.0,
             y: 100.0,
-            width: (1920.0 * 0.3), // 30% of typical screen width
+            width: (1920.0 * 0.3),  // 30% of typical screen width
             height: (1080.0 * 0.7), // 70% of typical screen height
         });
     }
@@ -120,8 +120,8 @@ fn load_window_config() -> Result<WindowConfig, String> {
     let content = fs::read_to_string(&config_path)
         .map_err(|e| format!("Failed to read config file: {}", e))?;
 
-    let config: WindowConfig = serde_json::from_str(&content)
-        .map_err(|e| format!("Failed to parse config: {}", e))?;
+    let config: WindowConfig =
+        serde_json::from_str(&content).map_err(|e| format!("Failed to parse config: {}", e))?;
 
     Ok(config)
 }
@@ -151,8 +151,7 @@ fn save_todos(todos: Value) -> Result<(), String> {
     let json_str = serde_json::to_string_pretty(&todos)
         .map_err(|e| format!("Failed to serialize todos: {}", e))?;
 
-    std::fs::write(todo_file, json_str)
-        .map_err(|e| format!("Failed to write todo file: {}", e))?;
+    std::fs::write(todo_file, json_str).map_err(|e| format!("Failed to write todo file: {}", e))?;
 
     Ok(())
 }
@@ -194,8 +193,8 @@ fn load_todos() -> Result<Value, String> {
     let json_str = std::fs::read_to_string(todo_file)
         .map_err(|e| format!("Failed to read todo file: {}", e))?;
 
-    let todos: Value = serde_json::from_str(&json_str)
-        .map_err(|e| format!("Failed to parse todo file: {}", e))?;
+    let todos: Value =
+        serde_json::from_str(&json_str).map_err(|e| format!("Failed to parse todo file: {}", e))?;
 
     Ok(todos)
 }
@@ -299,11 +298,13 @@ fn clear_archived_todos() -> Result<(), String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
             // 在启动时就设置窗口层级
             let window = app.get_webview_window("main").unwrap();
-            
+
             #[cfg(target_os = "windows")]
             {
                 use std::ffi::c_void;
@@ -311,18 +312,29 @@ pub fn run() {
                     unsafe {
                         let hwnd_ptr = hwnd.0 as *mut c_void;
                         let user32 = libloading::Library::new("user32.dll").unwrap();
-                        let set_window_pos: libloading::Symbol<unsafe extern "system" fn(*mut c_void, *mut c_void, i32, i32, i32, i32, u32) -> i32> = 
-                            user32.get(b"SetWindowPos").unwrap();
-                        let _set_window_long: libloading::Symbol<unsafe extern "system" fn(*mut c_void, i32, i32) -> i32> = 
-                            user32.get(b"SetWindowLongA").unwrap();
-                        let _get_window_long: libloading::Symbol<unsafe extern "system" fn(*mut c_void, i32) -> i32> = 
-                            user32.get(b"GetWindowLongA").unwrap();
-                        
+                        let set_window_pos: libloading::Symbol<
+                            unsafe extern "system" fn(
+                                *mut c_void,
+                                *mut c_void,
+                                i32,
+                                i32,
+                                i32,
+                                i32,
+                                u32,
+                            ) -> i32,
+                        > = user32.get(b"SetWindowPos").unwrap();
+                        let _set_window_long: libloading::Symbol<
+                            unsafe extern "system" fn(*mut c_void, i32, i32) -> i32,
+                        > = user32.get(b"SetWindowLongA").unwrap();
+                        let _get_window_long: libloading::Symbol<
+                            unsafe extern "system" fn(*mut c_void, i32) -> i32,
+                        > = user32.get(b"GetWindowLongA").unwrap();
+
                         // 设置窗口样式，使其不能获得焦点 - 注释掉以允许输入框获得焦点
                         // GWL_EXSTYLE = -20, WS_EX_NOACTIVATE = 0x08000000
                         // let ex_style = get_window_long(hwnd_ptr, -20);
                         // set_window_long(hwnd_ptr, -20, ex_style | 0x08000000);
-                        
+
                         // 设置窗口位置到最底层
                         // HWND_BOTTOM = 1, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE = 0x0013
                         set_window_pos(hwnd_ptr, 1 as *mut c_void, 0, 0, 0, 0, 0x0013);
@@ -333,20 +345,23 @@ pub fn run() {
             let settings = MenuItem::with_id(app, "settings", "设置", true, None::<&str>)?;
             let show = MenuItem::with_id(app, "show", "显示", true, None::<&str>)?;
             let hide = MenuItem::with_id(app, "hide", "隐藏", true, None::<&str>)?;
-            
-            let menu = Menu::with_items(app, &[
-                &show,
-                &hide,
-                &PredefinedMenuItem::separator(app)?,
-                &settings,
-                &PredefinedMenuItem::separator(app)?,
-                &quit,
-            ])?;
+
+            let menu = Menu::with_items(
+                app,
+                &[
+                    &show,
+                    &hide,
+                    &PredefinedMenuItem::separator(app)?,
+                    &settings,
+                    &PredefinedMenuItem::separator(app)?,
+                    &quit,
+                ],
+            )?;
 
             // 直接使用原始字节数据创建图标
             let icon_bytes = include_bytes!("../icons/icon.ico");
             let icon = tauri::image::Image::from_bytes(icon_bytes)?;
-            
+
             let _tray = TrayIconBuilder::with_id("main-tray")
                 .icon(icon)
                 .menu(&menu)
@@ -372,45 +387,75 @@ pub fn run() {
                     _ => {}
                 })
                 .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click { button: tauri::tray::MouseButton::Left, .. } = event {
+                    if let TrayIconEvent::Click {
+                        button: tauri::tray::MouseButton::Left,
+                        ..
+                    } = event
+                    {
                         let app = tray.app_handle();
                         if let Some(window) = app.get_webview_window("main") {
                             let is_visible = window.is_visible().unwrap_or(false);
                             if is_visible {
                                 let _ = window.hide();
-                                                                        } else {
-                                                let _ = window.show();
-                                                // 不要设置焦点，避免窗口获得焦点而显示在前台
-                                                // let _ = window.set_focus();
-                                                
-                                                // 设置窗口到桌面层级
-                                                #[cfg(target_os = "windows")]
-                                                {
-                                                    use std::ffi::c_void;
-                                                    if let Ok(hwnd) = window.hwnd() {
-                                                        unsafe {
-                                                            // 使用 Windows API 设置窗口层级
-                                                            let hwnd_ptr = hwnd.0 as *mut c_void;
-                                                            let user32 = libloading::Library::new("user32.dll").unwrap();
-                                                            let set_window_pos: libloading::Symbol<unsafe extern "system" fn(*mut c_void, *mut c_void, i32, i32, i32, i32, u32) -> i32> = 
-                                                                user32.get(b"SetWindowPos").unwrap();
-                                                            let _set_window_long: libloading::Symbol<unsafe extern "system" fn(*mut c_void, i32, i32) -> i32> = 
-                                                                user32.get(b"SetWindowLongA").unwrap();
-                                                            let _get_window_long: libloading::Symbol<unsafe extern "system" fn(*mut c_void, i32) -> i32> = 
-                                                                user32.get(b"GetWindowLongA").unwrap();
-                                                            
-                                                            // 设置窗口样式，使其不能获得焦点 - 注释掉以允许输入框获得焦点
-                                                            // GWL_EXSTYLE = -20, WS_EX_NOACTIVATE = 0x08000000
-                                                            // let ex_style = get_window_long(hwnd_ptr, -20);
-                                                            // set_window_long(hwnd_ptr, -20, ex_style | 0x08000000);
-                                                            
-                                                            // 设置窗口位置到最底层
-                                                            // HWND_BOTTOM = 1, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE = 0x0013
-                                                            set_window_pos(hwnd_ptr, 1 as *mut c_void, 0, 0, 0, 0, 0x0013);
-                                                        }
-                                                    }
-                                                }
-                                            }
+                            } else {
+                                let _ = window.show();
+                                // 不要设置焦点，避免窗口获得焦点而显示在前台
+                                // let _ = window.set_focus();
+
+                                // 设置窗口到桌面层级
+                                #[cfg(target_os = "windows")]
+                                {
+                                    use std::ffi::c_void;
+                                    if let Ok(hwnd) = window.hwnd() {
+                                        unsafe {
+                                            // 使用 Windows API 设置窗口层级
+                                            let hwnd_ptr = hwnd.0 as *mut c_void;
+                                            let user32 =
+                                                libloading::Library::new("user32.dll").unwrap();
+                                            let set_window_pos: libloading::Symbol<
+                                                unsafe extern "system" fn(
+                                                    *mut c_void,
+                                                    *mut c_void,
+                                                    i32,
+                                                    i32,
+                                                    i32,
+                                                    i32,
+                                                    u32,
+                                                )
+                                                    -> i32,
+                                            > = user32.get(b"SetWindowPos").unwrap();
+                                            let _set_window_long: libloading::Symbol<
+                                                unsafe extern "system" fn(
+                                                    *mut c_void,
+                                                    i32,
+                                                    i32,
+                                                )
+                                                    -> i32,
+                                            > = user32.get(b"SetWindowLongA").unwrap();
+                                            let _get_window_long: libloading::Symbol<
+                                                unsafe extern "system" fn(*mut c_void, i32) -> i32,
+                                            > = user32.get(b"GetWindowLongA").unwrap();
+
+                                            // 设置窗口样式，使其不能获得焦点 - 注释掉以允许输入框获得焦点
+                                            // GWL_EXSTYLE = -20, WS_EX_NOACTIVATE = 0x08000000
+                                            // let ex_style = get_window_long(hwnd_ptr, -20);
+                                            // set_window_long(hwnd_ptr, -20, ex_style | 0x08000000);
+
+                                            // 设置窗口位置到最底层
+                                            // HWND_BOTTOM = 1, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE = 0x0013
+                                            set_window_pos(
+                                                hwnd_ptr,
+                                                1 as *mut c_void,
+                                                0,
+                                                0,
+                                                0,
+                                                0,
+                                                0x0013,
+                                            );
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
                 })
@@ -418,7 +463,22 @@ pub fn run() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![greet, save_window_config, load_window_config, show_main_window, hide_main_window, save_app_state, load_app_state, save_todos, load_todos, save_settings, load_settings, save_archived_todos, load_archived_todos, clear_archived_todos])
+        .invoke_handler(tauri::generate_handler![
+            greet,
+            save_window_config,
+            load_window_config,
+            show_main_window,
+            hide_main_window,
+            save_app_state,
+            load_app_state,
+            save_todos,
+            load_todos,
+            save_settings,
+            load_settings,
+            save_archived_todos,
+            load_archived_todos,
+            clear_archived_todos
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
