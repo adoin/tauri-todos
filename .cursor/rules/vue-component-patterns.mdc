@@ -1,0 +1,70 @@
+---
+globs: src/components/*.vue
+description: Vue component patterns and conventions for this project
+---
+
+# Vue Component Patterns
+
+## Component Structure
+
+All Vue components should follow this structure:
+
+```vue
+<script setup lang="ts">
+// 1. Imports
+// 2. Store usage
+// 3. Reactive state
+// 4. Computed properties
+// 5. Methods
+// 6. Lifecycle hooks
+</script>
+
+<template>
+  <!-- Template content -->
+</template>
+
+<style scoped>
+/* Component-specific styles using CSS variables */
+</style>
+```
+
+## Key Patterns
+
+### CSS Variables Usage
+- Use CSS variables defined in [App.vue](mdc:src/App.vue) for dynamic styling
+- Reference: `var(--todo-border-color)`, `var(--window-width)`, etc.
+- Avoid inline style bindings, prefer CSS variables
+
+### Element Plus Integration
+- Use `ElConfigProvider` for locale support
+- Import components individually: `import { ElButton, ElDialog } from 'element-plus'`
+- Use Chinese locale by default with English option
+
+### State Management
+- Use Pinia stores: `useAppStore()` for app settings, `useTodoStore()` for todos
+- Separate concerns: app settings vs todo data
+- Use reactive refs for local component state
+
+### Event Handling
+- Use `@change` for form inputs with proper type casting
+- Handle async operations with try-catch
+- Use debounced saving for performance
+
+## Component-Specific Guidelines
+
+### FloatingWindow.vue
+- Main draggable window component
+- Uses CSS variables for dimensions and styling
+- Handles window transparency and background modes
+
+### TodoList.vue
+- Manages todo CRUD operations
+- Uses tree structure for parent-child relationships
+- Implements deadline management with date picker
+- Uses fixed hover styles: `rgba(255, 255, 255, 0.2)`
+
+### SettingsModal.vue
+- Configuration interface for all app settings
+- Organized into sections: Appearance, Todo Settings, Color Theme, Behavior
+- Uses ElForm with proper validation
+- Implements color reset functionality

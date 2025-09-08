@@ -12,5 +12,6 @@ export default antfu({
   rules: {
     'node/prefer-global/process': 'off',
     'ts/no-empty-object-type': 'off',
+    'no-console': 'off',
   },
 })

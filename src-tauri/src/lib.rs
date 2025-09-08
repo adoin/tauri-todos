@@ -147,12 +147,32 @@ fn save_todos(todos: Value) -> Result<(), String> {
     std::fs::create_dir_all(&data_dir)
         .map_err(|e| format!("Failed to create data directory: {}", e))?;
 
-    let todo_file = data_dir.join("todo.json");
+    let todo_file = data_dir.join("todos.json");
     let json_str = serde_json::to_string_pretty(&todos)
         .map_err(|e| format!("Failed to serialize todos: {}", e))?;
 
     std::fs::write(todo_file, json_str)
         .map_err(|e| format!("Failed to write todo file: {}", e))?;
+
+    Ok(())
+}
+
+#[tauri::command]
+fn save_settings(settings: Value) -> Result<(), String> {
+    let data_dir = dirs::data_dir()
+        .ok_or("Failed to get data directory")?
+        .join("Ton")
+        .join("data");
+
+    std::fs::create_dir_all(&data_dir)
+        .map_err(|e| format!("Failed to create data directory: {}", e))?;
+
+    let settings_file = data_dir.join("settings.json");
+    let json_str = serde_json::to_string_pretty(&settings)
+        .map_err(|e| format!("Failed to serialize settings: {}", e))?;
+
+    std::fs::write(settings_file, json_str)
+        .map_err(|e| format!("Failed to write settings file: {}", e))?;
 
     Ok(())
 }
@@ -164,25 +184,11 @@ fn load_todos() -> Result<Value, String> {
         .join("Ton")
         .join("data");
 
-    let todo_file = data_dir.join("todo.json");
+    let todo_file = data_dir.join("todos.json");
 
     if !todo_file.exists() {
-        // 返回默认的空待办事项数据
-        return Ok(serde_json::json!({
-            "todos": [],
-            "settings": {
-                "colors": {
-                    "normal": "#1f2937",
-                    "warning": "#f59e0b",
-                    "urgent": "#ef4444",
-                    "completed": "#9ca3af",
-                    "background": "#ffffff",
-                    "border": "#e5e7eb",
-                    "hover": "#f3f4f6"
-                },
-                "archiveDays": 30
-            }
-        }));
+        // 返回默认的空待办事项数组
+        return Ok(serde_json::json!([]));
     }
 
     let json_str = std::fs::read_to_string(todo_file)
@@ -192,6 +198,40 @@ fn load_todos() -> Result<Value, String> {
         .map_err(|e| format!("Failed to parse todo file: {}", e))?;
 
     Ok(todos)
+}
+
+#[tauri::command]
+fn load_settings() -> Result<Value, String> {
+    let data_dir = dirs::data_dir()
+        .ok_or("Failed to get data directory")?
+        .join("Ton")
+        .join("data");
+
+    let settings_file = data_dir.join("settings.json");
+
+    if !settings_file.exists() {
+        // 返回默认设置
+        return Ok(serde_json::json!({
+            "colors": {
+                "normal": "#1f2937",
+                "warning": "#f59e0b",
+                "urgent": "#ef4444",
+                "completed": "#f5dbd6",
+                "background": "#60a5fa88",
+                "border": "#e5e7eb",
+                "hover": "#f3f4f6"
+            },
+            "archiveDays": 30
+        }));
+    }
+
+    let json_str = std::fs::read_to_string(settings_file)
+        .map_err(|e| format!("Failed to read settings file: {}", e))?;
+
+    let settings: Value = serde_json::from_str(&json_str)
+        .map_err(|e| format!("Failed to parse settings file: {}", e))?;
+
+    Ok(settings)
 }
 
 #[tauri::command]
@@ -378,7 +418,7 @@ pub fn run() {
 
             Ok(())
         })
-        .invoke_handler(tauri::generate_handler![greet, save_window_config, load_window_config, show_main_window, hide_main_window, save_app_state, load_app_state, save_todos, load_todos, save_archived_todos, load_archived_todos, clear_archived_todos])
+        .invoke_handler(tauri::generate_handler![greet, save_window_config, load_window_config, show_main_window, hide_main_window, save_app_state, load_app_state, save_todos, load_todos, save_settings, load_settings, save_archived_todos, load_archived_todos, clear_archived_todos])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

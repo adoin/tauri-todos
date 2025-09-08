@@ -3,7 +3,7 @@ import type { TodoItem } from '../types/todo'
 import { ElButton, ElCheckbox, ElDatePicker, ElDialog, ElInput, ElMessageBox } from 'element-plus'
 import { onMounted, ref } from 'vue'
 import { useTodoStore } from '../store/todo'
-import { timeUtils } from '../types/todo'
+import { timeUtils } from '../utils/time'
 
 const todoStore = useTodoStore()
 const newTodoText = ref('')
@@ -13,14 +13,17 @@ const editingText = ref('')
 // 日期时间选择器状态
 const showDatePicker = ref(false)
 const selectedTodoId = ref<string | null>(null)
-const selectedDate = ref<Date | null>(null)
+const selectedDate = ref<string | null>(null)
 
 // 输入框引用
 const mainInputRef = ref<HTMLInputElement>()
 
-// 加载待办事项
+// 加载待办事项和设置
 onMounted(async () => {
-  await todoStore.loadTodos()
+  await Promise.all([
+    todoStore.loadTodos(),
+    todoStore.loadSettings(),
+  ])
 })
 
 // 添加新的待办事项
@@ -73,14 +76,30 @@ function cancelEdit() {
 function setDeadline(todoId: string) {
   const currentTodo = todoStore.todos.find(t => t.id === todoId)
   selectedTodoId.value = todoId
-  selectedDate.value = currentTodo?.deadline ? new Date(currentTodo.deadline) : null
+  if (currentTodo?.deadline) {
+    // 将 ISO 字符串转换为 Date 对象，然后格式化为 YYYY-MM-DD HH:mm 格式
+    const date = new Date(currentTodo.deadline)
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    const hours = String(date.getHours()).padStart(2, '0')
+    const minutes = String(date.getMinutes()).padStart(2, '0')
+    selectedDate.value = `${year}-${month}-${day} ${hours}:${minutes}`
+  }
+  else {
+    selectedDate.value = null
+  }
   showDatePicker.value = true
 }
 
 // 确认设置截止时间
 async function confirmDeadline() {
   if (selectedTodoId.value) {
-    const deadline = selectedDate.value ? selectedDate.value.toISOString() : undefined
+    let deadline: string | undefined
+    if (selectedDate.value) {
+      // selectedDate.value 是字符串格式，转换为 ISO 字符串
+      deadline = new Date(selectedDate.value).toISOString()
+    }
     await todoStore.updateTodo(selectedTodoId.value, { deadline })
   }
   closeDatePicker()
@@ -166,7 +185,7 @@ async function deleteTodoWithConfirm(todoId: string) {
 </script>
 
 <template>
-  <div class="p-4 max-h-full overflow-y-auto bg-white/5 rounded-lg">
+  <div class="p-4 max-h-full overflow-y-auto rounded-lg">
     <!-- 添加新待办事项 -->
     <div class="flex gap-2 mb-4 pb-4 border-b border-white/20 items-center">
       <ElInput
@@ -206,7 +225,7 @@ async function deleteTodoWithConfirm(todoId: string) {
         <div
           v-for="todo in todoStore.todoTree"
           :key="todo.id"
-          class="mb-2 p-2 rounded-md transition-colors hover:bg-white/10 group"
+          class="mb-2 p-2 bg-white/10 backdrop-blur-sm rounded-md transition-colors group shadow-lg todo-item"
           :class="{ 'opacity-60': todo.completed }"
         >
           <!-- 待办事项内容 -->
@@ -214,12 +233,12 @@ async function deleteTodoWithConfirm(todoId: string) {
             <!-- 完成状态复选框 -->
             <ElCheckbox
               :model-value="todo.completed"
-              class="mt-0.5 cursor-pointer"
+              class="cursor-pointer"
               @change="todoStore.toggleTodo(todo.id)"
             />
 
             <!-- 文本内容 -->
-            <div class="flex-1 flex flex-col gap-1">
+            <div class="flex-1 flex flex-col gap-1 pt-1">
               <ElInput
                 v-if="editingId === todo.id"
                 v-model="editingText"
@@ -229,10 +248,11 @@ async function deleteTodoWithConfirm(todoId: string) {
               />
               <span
                 v-else
-                class="text-sm leading-relaxed cursor-pointer rounded px-1 py-0.5"
+                class="text-sm leading-relaxed cursor-pointer rounded px-1 py-0.5 text-shadow-sm"
                 :style="{
                   color: todoStore.getTodoColor(todo),
                   textDecoration: todo.completed ? 'line-through' : 'none',
+                  textShadow: '0 1px 2px rgba(0, 0, 0, 0.8), 0 0 4px rgba(0, 0, 0, 0.5)',
                 }"
                 @dblclick="startEdit(todo)"
               >
@@ -240,12 +260,12 @@ async function deleteTodoWithConfirm(todoId: string) {
               </span>
 
               <!-- 时间显示 -->
-              <div v-if="todo.deadline && editingId !== todo.id" class="text-xs opacity-80">
+              <div v-if="todo.deadline && editingId !== todo.id" class="text-xs opacity-80" style="text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8), 0 0 4px rgba(0, 0, 0, 0.5);">
                 {{ getTimeDisplay(todo) }}
               </div>
 
               <!-- 完成时间显示 -->
-              <div v-if="todo.completed && todo.completedAt" class="text-xs opacity-60 text-gray-500">
+              <div v-if="todo.completed && todo.completedAt" class="text-xs opacity-60 text-gray-500" style="text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8), 0 0 4px rgba(0, 0, 0, 0.5);">
                 完成于: {{ timeUtils.formatTime(todo.completedAt) }}
               </div>
             </div>
@@ -265,22 +285,26 @@ async function deleteTodoWithConfirm(todoId: string) {
                 <ElButton
                   size="small"
                   type="primary"
+                  plain
                   title="添加子项"
                   @click="addChildTodo(todo.id)"
                 >
-                  ➕
+                  ➕ 子项
                 </ElButton>
                 <ElButton
                   size="small"
                   type="danger"
                   title="删除"
+                  plain
                   @click="deleteTodoWithConfirm(todo.id)"
                 >
-                  🗑️
+                  删除
                 </ElButton>
                 <ElButton
                   size="small"
                   title="设置截止时间"
+                  type="success"
+                  plain
                   @click="setDeadline(todo.id)"
                 >
                   ⏰
@@ -288,6 +312,8 @@ async function deleteTodoWithConfirm(todoId: string) {
                 <ElButton
                   size="small"
                   title="编辑"
+                  type="primary"
+                  plain
                   @click="startEdit(todo)"
                 >
                   ✏️
@@ -301,17 +327,17 @@ async function deleteTodoWithConfirm(todoId: string) {
             <div
               v-for="child in todo.children"
               :key="child.id"
-              class="mb-2 p-2 rounded-md transition-colors group ml-0"
+              class="mb-2 p-2 bg-white/5 backdrop-blur-sm rounded-md transition-colors group ml-0 shadow-md todo-item-child"
               :class="{ 'opacity-60': child.completed }"
             >
               <div class="flex items-start gap-2">
                 <ElCheckbox
                   :model-value="child.completed"
-                  class="mt-0.5 cursor-pointer"
+                  class="cursor-pointer"
                   @change="todoStore.toggleTodo(child.id)"
                 />
 
-                <div class="flex-1 flex flex-col gap-1">
+                <div class="flex-1 flex flex-col gap-1 pt-1">
                   <ElInput
                     v-if="editingId === child.id"
                     v-model="editingText"
@@ -321,21 +347,22 @@ async function deleteTodoWithConfirm(todoId: string) {
                   />
                   <span
                     v-else
-                    class="text-sm leading-relaxed cursor-pointer hover:bg-white/30 hover:backdrop-blur-sm hover:rounded px-1 py-0.5"
+                    class="text-sm leading-relaxed cursor-pointer hover:rounded px-1 py-0.5"
                     :style="{
                       color: todoStore.getTodoColor(child),
                       textDecoration: child.completed ? 'line-through' : 'none',
+                      textShadow: '0 1px 2px rgba(0, 0, 0, 0.8), 0 0 4px rgba(0, 0, 0, 0.5)',
                     }"
                     @dblclick="startEdit(child)"
                   >
                     {{ child.text }}
                   </span>
 
-                  <div v-if="child.deadline && editingId !== child.id" class="text-xs opacity-80">
+                  <div v-if="child.deadline && editingId !== child.id" class="text-xs opacity-80" style="text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8), 0 0 4px rgba(0, 0, 0, 0.5);">
                     {{ getTimeDisplay(child) }}
                   </div>
 
-                  <div v-if="child.completed && child.completedAt" class="text-xs opacity-60 text-gray-500">
+                  <div v-if="child.completed && child.completedAt" class="text-xs opacity-60 text-gray-500" style="text-shadow: 0 1px 2px rgba(0, 0, 0, 0.8), 0 0 4px rgba(0, 0, 0, 0.5);">
                     完成于: {{ timeUtils.formatTime(child.completedAt) }}
                   </div>
                 </div>
@@ -354,13 +381,16 @@ async function deleteTodoWithConfirm(todoId: string) {
                     <ElButton
                       size="small"
                       type="danger"
+                      plain
                       title="删除"
                       @click="deleteTodoWithConfirm(child.id)"
                     >
-                      🗑️
+                      删除
                     </ElButton>
                     <ElButton
                       size="small"
+                      type="success"
+                      plain
                       title="设置截止时间"
                       @click="setDeadline(child.id)"
                     >
@@ -368,6 +398,8 @@ async function deleteTodoWithConfirm(todoId: string) {
                     </ElButton>
                     <ElButton
                       size="small"
+                      type="primary"
+                      plain
                       title="编辑"
                       @click="startEdit(child)"
                     >
@@ -417,3 +449,21 @@ async function deleteTodoWithConfirm(todoId: string) {
     </ElDialog>
   </div>
 </template>
+
+<style scoped>
+.todo-item {
+  border: 1px solid var(--todo-border-color);
+}
+
+.todo-item:hover {
+  background-color: rgba(255, 255, 255, 0.2) !important;
+}
+
+.todo-item-child {
+  border: 1px solid var(--todo-border-color);
+}
+
+.todo-item-child:hover {
+  background-color: rgba(255, 255, 255, 0.2) !important;
+}
+</style>

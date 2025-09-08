@@ -1,6 +1,8 @@
+import type { LocaleKey } from '../constants/locale'
 import { invoke } from '@tauri-apps/api/core'
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
+import { defaultLocale } from '../constants/locale'
 
 export const useAppStore = defineStore('app', () => {
   // 悬浮窗口状态
@@ -23,6 +25,9 @@ export const useAppStore = defineStore('app', () => {
     x: 100,
     y: 100,
   })
+
+  // 语言配置
+  const locale = ref<LocaleKey>(defaultLocale)
 
   // 计算属性
   const windowStyle = computed(() => ({
@@ -59,6 +64,10 @@ export const useAppStore = defineStore('app', () => {
     windowPosition.value = { ...position }
   }
 
+  const updateLocale = (newLocale: LocaleKey) => {
+    locale.value = newLocale
+  }
+
   // 保存状态到本地 JSON 文件
   const saveState = async () => {
     try {
@@ -68,6 +77,7 @@ export const useAppStore = defineStore('app', () => {
         isSettingsOpen: isSettingsOpen.value,
         windowConfig: windowConfig.value,
         windowPosition: windowPosition.value,
+        locale: locale.value,
       }
       await invoke('save_app_state', { state })
     }
@@ -90,6 +100,9 @@ export const useAppStore = defineStore('app', () => {
         if (state.windowPosition) {
           windowPosition.value = { ...state.windowPosition }
         }
+        if (state.locale) {
+          locale.value = state.locale
+        }
       }
     }
     catch (error) {
@@ -109,7 +122,7 @@ export const useAppStore = defineStore('app', () => {
   }
 
   // 监听需要持久化的状态变化
-  watch([isTransparent, windowConfig, windowPosition], debouncedSave, { deep: true })
+  watch([isTransparent, windowConfig, windowPosition, locale], debouncedSave, { deep: true })
 
   return {
     // 状态
@@ -118,6 +131,7 @@ export const useAppStore = defineStore('app', () => {
     isSettingsOpen,
     windowConfig,
     windowPosition,
+    locale,
     // 计算属性
     windowStyle,
 
@@ -128,6 +142,7 @@ export const useAppStore = defineStore('app', () => {
     closeSettings,
     updateWindowConfig,
     updateWindowPosition,
+    updateLocale,
 
     // 持久化相关
     saveState,

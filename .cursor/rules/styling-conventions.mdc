@@ -1,0 +1,76 @@
+---
+globs: src/**/*.vue,src/**/*.css,src/**/*.ts
+description: Styling conventions and CSS variable usage patterns
+---
+
+# Styling Conventions
+
+## CSS Variables System
+
+All dynamic styling uses CSS variables defined in [App.vue](mdc:src/App.vue):
+
+### Window Configuration
+```css
+--window-width: 576px
+--window-height: 756px
+--window-opacity: 0.8
+--window-border-radius: 8px
+--window-border-width: 2px
+--window-border-color: #3b82f6
+--window-background: rgba(255, 255, 255, 0.8)
+```
+
+### Todo Colors
+```css
+--todo-normal-color: #1f2937
+--todo-warning-color: #f59e0b
+--todo-urgent-color: #ef4444
+--todo-completed-color: #f5dbd6
+--todo-background-color: #60a5fa88
+--todo-border-color: #e5e7eb
+```
+
+## Styling Patterns
+
+### Background Transparency
+- Use `bg-white/10 backdrop-blur-sm` for semi-transparent backgrounds
+- Add `text-shadow` for text readability on varying backgrounds
+- Fixed hover effect: `rgba(255, 255, 255, 0.2)`
+
+### Component Styling
+```vue
+<style scoped>
+.component-class {
+  border: 1px solid var(--todo-border-color);
+  background-color: var(--window-background);
+}
+
+.component-class:hover {
+  background-color: rgba(255, 255, 255, 0.2) !important;
+}
+</style>
+```
+
+### UnoCSS Classes
+- Use utility classes for layout: `flex`, `items-center`, `gap-3`
+- Use responsive classes: `w-full`, `h-full`
+- Use transition classes: `transition-all`, `duration-200`, `ease-in-out`
+
+## Transparency Modes
+
+### Transparent Background Mode (`isTransparent = true`)
+- Window background: `transparent`
+- Window opacity: controlled by slider
+- Content has backdrop-blur for readability
+
+### Solid Background Mode (`isTransparent = false`)
+- Window background: `rgba(255, 255, 255, opacity)`
+- Window opacity: `1` (fully opaque)
+- Background transparency controlled by slider
+
+## Color Management
+
+- Colors defined in [constants/todo.ts](mdc:src/constants/todo.ts)
+- No hover color configuration (uses fixed white overlay)
+- Color reset functionality restores defaults
+- Element Plus color pickers for user customization

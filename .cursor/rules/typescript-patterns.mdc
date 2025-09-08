@@ -1,0 +1,127 @@
+---
+globs: src/**/*.ts,src/**/*.vue
+description: TypeScript patterns and type safety conventions
+---
+
+# TypeScript Patterns
+
+## Type Definitions
+
+### Core Interfaces
+```typescript
+// TodoItem - Main todo structure
+interface TodoItem {
+  id: string
+  text: string
+  completed: boolean
+  createdAt: string // ISO string
+  completedAt?: string
+  deadline?: string // ISO string
+  parentId?: string
+  children?: TodoItem[]
+}
+
+// TodoSettings - Configuration
+interface TodoSettings {
+  colors: {
+    normal: string
+    warning: string
+    urgent: string
+    completed: string
+    background: string
+    border: string
+  }
+  archiveDays: number
+}
+```
+
+## Store Patterns
+
+### Pinia Store Structure
+```typescript
+export const useStore = defineStore('storeName', () => {
+  // 1. State (refs)
+  const state = ref<Type>(initialValue)
+  
+  // 2. Computed properties
+  const computed = computed(() => { /* logic */ })
+  
+  // 3. Actions
+  const action = async () => { /* async logic */ }
+  
+  // 4. Return public API
+  return {
+    state,
+    computed,
+    action
+  }
+})
+```
+
+### Type Safety Patterns
+- Use `ref<Type>()` for reactive state
+- Use `computed<Type>()` for computed properties
+- Use proper type annotations for function parameters
+- Handle `string | null` from Element Plus components
+
+## Element Plus Integration
+
+### Component Types
+```typescript
+// Color picker change handler
+@change="(color: string | null) => updateColor(color)"
+
+// Date picker with value-format
+const selectedDate = ref<string | null>(null)
+
+// Form validation
+const formRef = ref<InstanceType<typeof ElForm>>()
+```
+
+## Error Handling
+
+### Async Operations
+```typescript
+const saveData = async () => {
+  try {
+    await invoke('save_command', { data })
+  } catch (error) {
+    console.error('Save failed:', error)
+    ElMessage.error('保存失败')
+  }
+}
+```
+
+### Type Guards
+```typescript
+const isValidTodo = (item: any): item is TodoItem => {
+  return item && typeof item.id === 'string' && typeof item.text === 'string'
+}
+```
+
+## Import Patterns
+
+### Store Imports
+```typescript
+import { useAppStore } from '../store/app'
+import { useTodoStore } from '../store/todo'
+```
+
+### Utility Imports
+```typescript
+import { timeUtils } from '../utils/time'
+import { defaultTodoSettings } from '../constants/todo'
+```
+
+### Type Imports
+```typescript
+import type { TodoItem, TodoSettings } from '../types/todo'
+import type { LocaleKey } from '../constants/locale'
+```
+
+## Constants and Defaults
+
+- Define defaults in `constants/` directory
+- Use `as const` for literal types
+- Export types alongside values
+- Use proper TypeScript enums for fixed values

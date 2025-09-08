@@ -1,0 +1,93 @@
+---
+alwaysApply: true
+description: Development workflow and best practices for this project
+---
+
+# Development Workflow
+
+## Package Management
+- **Use pnpm**: All package management and script execution
+- **Scripts**: `pnpm dev`, `pnpm build`, `pnpm tauri dev`
+
+## Code Organization
+
+### File Structure Rules
+- `types/` - Only TypeScript interfaces and type definitions
+- `constants/` - Application constants and default values
+- `utils/` - Pure utility functions
+- `store/` - Pinia stores for state management
+- `components/` - Vue components
+
+### Import Order
+1. External libraries (Vue, Element Plus, etc.)
+2. Internal stores and composables
+3. Types and interfaces
+4. Constants and utilities
+5. Relative imports
+
+## Development Practices
+
+### CSS Variables Approach
+- Define all dynamic styles as CSS variables in [App.vue](mdc:src/App.vue)
+- Use `var(--variable-name)` in component styles
+- Avoid inline style bindings, prefer CSS variables
+- Use fixed values for hover effects (e.g., `rgba(255, 255, 255, 0.2)`)
+
+### State Management
+- Separate app settings from todo data
+- Use different save/load methods for different data types
+- Implement debounced saving for performance
+- Use reactive refs for local component state
+
+### Error Handling
+- Use try-catch for async operations
+- Provide user-friendly error messages
+- Handle file I/O errors gracefully
+- Use proper TypeScript error types
+
+## Testing and Debugging
+
+### Development Commands
+```bash
+# Start development server
+pnpm dev
+
+# Build for production
+pnpm build
+
+# Run Tauri development
+pnpm tauri dev
+```
+
+### Common Issues
+- **Date picker types**: Use `string | null` for ElDatePicker with value-format
+- **Color picker types**: Handle `string | null` from @change events
+- **CSS variable updates**: Ensure variables are defined in App.vue
+- **File persistence**: Check data/ directory for JSON files
+
+## Code Quality
+
+### Linting
+- Use ESLint for TypeScript and Vue files
+- Fix linter errors before committing
+- Follow consistent formatting rules
+
+### Type Safety
+- Use proper TypeScript types
+- Avoid `any` types
+- Use type guards for runtime validation
+- Handle nullable types properly
+
+## User Experience
+
+### Accessibility
+- Use semantic HTML elements
+- Provide proper ARIA labels
+- Ensure keyboard navigation works
+- Use proper color contrast
+
+### Performance
+- Use debounced saving
+- Implement proper loading states
+- Optimize re-renders with computed properties
+- Use CSS variables for dynamic styling

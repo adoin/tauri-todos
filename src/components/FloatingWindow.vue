@@ -154,12 +154,12 @@ onUnmounted(() => {
 <template>
   <div
     ref="windowElement"
-    class="relative backdrop-blur-10px transition-all duration-200 ease-in-out overflow-hidden rounded-lg w-screen h-screen bg-[#ffffff1a] border border-solid border-white/20"
+    class="relative backdrop-blur-10px transition-all duration-200 ease-in-out overflow-hidden floating-window"
     @mouseenter="handleMouseEnter"
     @mouseleave="handleMouseLeave"
   >
     <!-- 悬浮窗口内容 -->
-    <div class="w-full h-full flex flex-col bg-white/10">
+    <div class="w-full h-full flex flex-col">
       <!-- 顶部工具栏 -->
       <div
         class="h-10 flex items-center justify-between px-3 transition-all duration-200 ease-in-out hover:bg-white/20 hover:backdrop-blur-5px hover:border-b hover:border-white/20 hover:rounded-t-lg"
@@ -183,7 +183,7 @@ onUnmounted(() => {
             title="设置"
             @click="openSettings"
           >
-            ⚙️
+            ⚙
           </button>
         </div>
       </div>
@@ -195,3 +195,14 @@ onUnmounted(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.floating-window {
+  width: var(--window-width, 576px);
+  height: var(--window-height, 756px);
+  border-radius: var(--window-border-radius, 8px);
+  border: var(--window-border-width, 2px) solid var(--window-border-color, #3b82f6);
+  background-color: var(--window-background, transparent);
+  opacity: var(--window-opacity, 0.8);
+}
+</style>
