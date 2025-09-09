@@ -23,6 +23,14 @@ export interface TodoSettings {
   }
   // 回收时间设置（天数）
   archiveDays: number
+  // Git同步配置
+  gitSync: {
+    enabled: boolean // 是否启用Git同步
+    repositoryUrl: string // Git仓库地址
+    sshKeyPath?: string // SSH密钥文件路径
+    lastSyncTime?: string // 最后同步时间
+    autoSync: boolean // 是否自动同步
+  }
 }
 
 export interface TodoData {

@@ -110,7 +110,16 @@ export const useTodoStore = defineStore('todo', () => {
   const loadSettings = async () => {
     try {
       const settingsData = await invoke('load_settings') as TodoSettings
-      settings.value = { ...defaultTodoSettings, ...settingsData }
+      // 确保gitSync字段存在，如果不存在则使用默认值
+      const mergedSettings = {
+        ...defaultTodoSettings,
+        ...settingsData,
+        gitSync: {
+          ...defaultTodoSettings.gitSync,
+          ...(settingsData.gitSync || {}),
+        },
+      }
+      settings.value = mergedSettings
     }
     catch (err) {
       console.error('Failed to load settings:', err)
@@ -504,8 +513,154 @@ export const useTodoStore = defineStore('todo', () => {
     }
   }
 
+  // Git同步相关方法
+  const initializeGitSync = async () => {
+    try {
+      loading.value = true
+      const result = await invoke('initialize_git_sync', {
+        repositoryUrl: settings.value.gitSync.repositoryUrl,
+        sshKeyPath: settings.value.gitSync.sshKeyPath,
+      })
+      settings.value.gitSync.lastSyncTime = new Date().toISOString()
+      await saveSettings()
+      console.log('Git同步初始化成功:', result)
+    }
+    catch (err) {
+      error.value = err instanceof Error ? err.message : 'Git同步初始化失败'
+      console.error('Failed to initialize Git sync:', err)
+      throw err
+    }
+    finally {
+      loading.value = false
+    }
+  }
+
+  const syncWithGit = async () => {
+    try {
+      loading.value = true
+      const result = await invoke('sync_todos_with_git', {
+        settings: settings.value,
+      })
+      settings.value.gitSync.lastSyncTime = new Date().toISOString()
+      await saveSettings()
+
+      // 重新加载数据以获取最新状态
+      await loadTodos()
+
+      console.log('Git同步成功:', result)
+    }
+    catch (err) {
+      error.value = err instanceof Error ? err.message : 'Git同步失败'
+      console.error('Failed to sync with Git:', err)
+      throw err
+    }
+    finally {
+      loading.value = false
+    }
+  }
+
+  const getGitSyncStatus = async () => {
+    try {
+      const status = await invoke('get_sync_status')
+      return status
+    }
+    catch (err) {
+      console.error('Failed to get Git sync status:', err)
+      return { initialized: false, message: 'Failed to get status' }
+    }
+  }
+
+  const testGitPushAuth = async () => {
+    try {
+      const result = await invoke('test_git_push_auth', {
+        settings: settings.value,
+      })
+      return result
+    }
+    catch (err) {
+      console.error('Failed to test Git push auth:', err)
+      throw err
+    }
+  }
+
+  const checkLocalSyncFiles = async () => {
+    try {
+      const result = await invoke('check_local_sync_files')
+      return result
+    }
+    catch (err) {
+      console.error('Failed to check local sync files:', err)
+      throw err
+    }
+  }
+
+  const selectSSHKeyFile = async () => {
+    try {
+      const result = await invoke('select_ssh_key_file')
+      return result
+    }
+    catch (err) {
+      console.error('Failed to select SSH key file:', err)
+      throw err
+    }
+  }
+
+  const checkGitRemoteUrl = async () => {
+    try {
+      const result = await invoke('check_git_remote_url')
+      return result
+    }
+    catch (err) {
+      console.error('Failed to check Git remote URL:', err)
+      throw err
+    }
+  }
+
+  const updateGitRemoteUrl = async () => {
+    try {
+      const result = await invoke('update_git_remote_url', {
+        newUrl: settings.value.gitSync.repositoryUrl,
+      })
+      return result
+    }
+    catch (err) {
+      console.error('Failed to update Git remote URL:', err)
+      throw err
+    }
+  }
+
+  // 自动同步检查
+  const checkAutoSync = async () => {
+    if (!settings.value.gitSync.enabled || !settings.value.gitSync.autoSync) {
+      return
+    }
+
+    const lastSync = settings.value.gitSync.lastSyncTime
+    if (!lastSync) {
+      return
+    }
+
+    const lastSyncDate = new Date(lastSync)
+    const today = new Date()
+    const daysDiff = Math.floor((today.getTime() - lastSyncDate.getTime()) / (1000 * 60 * 60 * 24))
+
+    // 如果超过1天没有同步，自动同步
+    if (daysDiff >= 1) {
+      try {
+        await syncWithGit()
+        console.log('自动同步完成')
+      }
+      catch (err) {
+        console.error('自动同步失败:', err)
+      }
+    }
+  }
+
   // 监听待办事项变化
   watch(todos, scheduleArchiveCheck, { deep: true })
+
+  // 启动时检查自动同步
+  checkAutoSync()
 
   return {
     // 状态
@@ -536,5 +691,14 @@ export const useTodoStore = defineStore('todo', () => {
     exportTodos,
     importTodos,
     setDataSource,
+    initializeGitSync,
+    syncWithGit,
+    getGitSyncStatus,
+    testGitPushAuth,
+    checkLocalSyncFiles,
+    selectSSHKeyFile,
+    checkGitRemoteUrl,
+    updateGitRemoteUrl,
+    checkAutoSync,
   }
 })

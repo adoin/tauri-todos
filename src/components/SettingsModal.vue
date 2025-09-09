@@ -73,6 +73,249 @@ function updateBorderColor(color: string | null) {
     appStore.updateWindowConfig({ borderColor: color })
   }
 }
+
+// Git同步相关方法
+async function updateGitSyncEnabled(enabled: boolean) {
+  await todoStore.updateSettings({
+    gitSync: {
+      ...todoStore.settings.gitSync,
+      enabled,
+    },
+  })
+}
+
+async function updateGitRepositoryUrl() {
+  const url = todoStore.settings.gitSync.repositoryUrl.trim()
+
+  // 校验SSH格式
+  if (url && !isValidSSHUrl(url)) {
+    ElMessage.error('请输入正确的SSH格式Git仓库地址，例如：git@github.com:username/repo.git')
+    return
+  }
+
+  await todoStore.updateSettings({
+    gitSync: {
+      ...todoStore.settings.gitSync,
+      repositoryUrl: url,
+    },
+  })
+}
+
+async function updateSSHKeyPath() {
+  await todoStore.updateSettings({
+    gitSync: {
+      ...todoStore.settings.gitSync,
+      sshKeyPath: todoStore.settings.gitSync.sshKeyPath,
+    },
+  })
+}
+
+async function selectSSHKeyFile() {
+  try {
+    const result = await todoStore.selectSSHKeyFile()
+    if (result) {
+      await todoStore.updateSettings({
+        gitSync: {
+          ...todoStore.settings.gitSync,
+          sshKeyPath: result,
+        },
+      })
+      ElMessage.success('SSH密钥文件路径已设置')
+    }
+  }
+  catch (error) {
+    console.error('选择SSH密钥文件失败:', error)
+    ElMessage.error('选择SSH密钥文件失败')
+  }
+}
+
+function isValidSSHUrl(url: string): boolean {
+  // 检查SSH格式：git@hostname:path
+  const sshPattern = /^git@[a-zA-Z0-9.-]+:[\w./-]+\.git$/
+  return sshPattern.test(url)
+}
+
+async function updateGitAutoSync(autoSync: boolean) {
+  await todoStore.updateSettings({
+    gitSync: {
+      ...todoStore.settings.gitSync,
+      autoSync,
+    },
+  })
+}
+
+// 包装函数处理ElSwitch的类型问题
+function handleGitSyncEnabledChange(val: string | number | boolean) {
+  updateGitSyncEnabled(Boolean(val))
+}
+
+function handleGitAutoSyncChange(val: string | number | boolean) {
+  updateGitAutoSync(Boolean(val))
+}
+
+async function initializeGitSync() {
+  try {
+    if (!todoStore.settings.gitSync.repositoryUrl) {
+      ElMessage.warning('请先设置Git仓库地址')
+      return
+    }
+
+    // 校验SSH格式
+    if (!isValidSSHUrl(todoStore.settings.gitSync.repositoryUrl)) {
+      ElMessage.error('请输入正确的SSH格式Git仓库地址，例如：git@github.com:username/repo.git')
+      return
+    }
+
+    // 检查SSH密钥路径
+    if (!todoStore.settings.gitSync.sshKeyPath || todoStore.settings.gitSync.sshKeyPath.trim() === '') {
+      ElMessage.error('SSH格式的仓库地址需要设置SSH密钥文件路径')
+      return
+    }
+
+    ElMessage.info('正在初始化Git同步...')
+    await todoStore.initializeGitSync()
+    ElMessage.success('Git同步初始化成功')
+  }
+  catch (error) {
+    console.error('Git同步初始化失败:', error)
+    ElMessage.error(`Git同步初始化失败: ${error instanceof Error ? error.message : '未知错误'}`)
+  }
+}
+
+async function manualSync() {
+  try {
+    if (!todoStore.settings.gitSync.repositoryUrl) {
+      ElMessage.warning('请先设置Git仓库地址')
+      return
+    }
+
+    // 校验SSH格式
+    if (!isValidSSHUrl(todoStore.settings.gitSync.repositoryUrl)) {
+      ElMessage.error('请输入正确的SSH格式Git仓库地址，例如：git@github.com:username/repo.git')
+      return
+    }
+
+    ElMessage.info('正在同步数据...')
+    await todoStore.syncWithGit()
+    ElMessage.success('数据同步成功')
+  }
+  catch (error) {
+    console.error('数据同步失败:', error)
+    ElMessage.error(`数据同步失败: ${error instanceof Error ? error.message : '未知错误'}`)
+  }
+}
+
+function formatSyncTime(syncTime: string) {
+  const date = new Date(syncTime)
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+}
+
+// 调试方法
+async function refreshSettings() {
+  try {
+    await todoStore.loadSettings()
+    ElMessage.success('设置已刷新')
+  }
+  catch (error) {
+    console.error('刷新设置失败:', error)
+    ElMessage.error('刷新设置失败')
+  }
+}
+
+async function checkGitRemoteUrl() {
+  try {
+    ElMessage.info('正在检查Git远程URL...')
+    const result = await todoStore.checkGitRemoteUrl()
+    ElMessage.success(`当前Git远程URL: ${result}`)
+  }
+  catch (error) {
+    console.error('检查Git远程URL失败:', error)
+    ElMessage.error(`检查Git远程URL失败: ${error instanceof Error ? error.message : '未知错误'}`)
+  }
+}
+
+async function updateGitRemoteUrl() {
+  try {
+    if (!todoStore.settings.gitSync.repositoryUrl) {
+      ElMessage.warning('请先设置Git仓库地址')
+      return
+    }
+
+    ElMessage.info('正在更新Git远程URL...')
+    const result = await todoStore.updateGitRemoteUrl()
+    ElMessage.success(result)
+  }
+  catch (error) {
+    console.error('更新Git远程URL失败:', error)
+    ElMessage.error(`更新Git远程URL失败: ${error instanceof Error ? error.message : '未知错误'}`)
+  }
+}
+
+async function resetGitSyncSettings() {
+  try {
+    await todoStore.updateSettings({
+      gitSync: {
+        enabled: false,
+        repositoryUrl: '',
+        autoSync: true,
+      },
+    })
+    ElMessage.success('Git设置已重置')
+  }
+  catch (error) {
+    console.error('重置Git设置失败:', error)
+    ElMessage.error('重置Git设置失败')
+  }
+}
+
+async function testGitPushAuth() {
+  try {
+    if (!todoStore.settings.gitSync.repositoryUrl) {
+      ElMessage.warning('请先设置Git仓库地址')
+      return
+    }
+
+    // 校验SSH格式
+    if (!isValidSSHUrl(todoStore.settings.gitSync.repositoryUrl)) {
+      ElMessage.error('请输入正确的SSH格式Git仓库地址，例如：git@github.com:username/repo.git')
+      return
+    }
+
+    ElMessage.info('正在测试Git推送权限...')
+    const result = await todoStore.testGitPushAuth()
+    ElMessage.success(result)
+  }
+  catch (error) {
+    console.error('Git推送权限测试失败:', error)
+    ElMessage.error(`Git推送权限测试失败: ${error instanceof Error ? error.message : '未知错误'}`)
+  }
+}
+
+async function checkLocalFiles() {
+  try {
+    ElMessage.info('正在检查本地同步文件...')
+    const result = await todoStore.checkLocalSyncFiles()
+    console.log('本地同步文件:', result)
+
+    if (result.exists) {
+      ElMessage.success(`找到 ${result.count} 个同步文件`)
+    }
+    else {
+      ElMessage.warning('未找到同步文件')
+    }
+  }
+  catch (error) {
+    console.error('检查本地文件失败:', error)
+    ElMessage.error(`检查本地文件失败: ${error instanceof Error ? error.message : '未知错误'}`)
+  }
+}
 </script>
 
 <template>
@@ -210,6 +453,99 @@ function updateBorderColor(color: string | null) {
             <ElButton type="warning" size="small" @click="resetColorsToDefault">
               恢复默认颜色
             </ElButton>
+          </ElFormItem>
+        </div>
+
+        <!-- Git同步设置 -->
+        <div class="mb-6">
+          <h3 class="text-lg font-semibold mb-4 pb-2 border-b border-gray-200">
+            Git同步设置
+          </h3>
+          <!-- 调试信息 -->
+          <div v-if="true" class="mb-4 p-2 bg-gray-100 rounded text-xs">
+            <p>调试信息:</p>
+            <p>gitSync存在: {{ !!todoStore.settings.gitSync }}</p>
+            <p>enabled: {{ todoStore.settings.gitSync?.enabled }}</p>
+            <p>repositoryUrl: {{ todoStore.settings.gitSync?.repositoryUrl }}</p>
+            <p>autoSync: {{ todoStore.settings.gitSync?.autoSync }}</p>
+          </div>
+
+          <ElFormItem label="启用Git同步">
+            <div class="flex items-center gap-2">
+              <ElSwitch v-model="todoStore.settings.gitSync.enabled" @change="handleGitSyncEnabledChange" />
+              <span class="text-sm text-gray-600">
+                {{ todoStore.settings.gitSync.enabled ? '已启用' : '已关闭' }}
+              </span>
+            </div>
+          </ElFormItem>
+
+          <ElFormItem v-if="todoStore.settings.gitSync.enabled" label="Git仓库地址">
+            <ElInput
+              v-model="todoStore.settings.gitSync.repositoryUrl"
+              placeholder="git@github.com:username/repo.git"
+              @change="updateGitRepositoryUrl"
+            />
+            <div class="text-xs text-gray-500 mt-1">
+              请输入SSH格式的Git仓库地址
+            </div>
+          </ElFormItem>
+          <ElFormItem v-if="todoStore.settings.gitSync.enabled" label="SSH密钥文件路径">
+            <div class="flex gap-2">
+              <ElInput
+                v-model="todoStore.settings.gitSync.sshKeyPath"
+                placeholder="C:\Users\用户名\.ssh\id_rsa"
+                @change="updateSSHKeyPath"
+              />
+              <ElButton type="primary" size="small" @click="selectSSHKeyFile">
+                选择文件
+              </ElButton>
+            </div>
+            <div class="text-xs text-gray-500 mt-1">
+              指定SSH私钥文件的完整路径，用于Git认证
+            </div>
+          </ElFormItem>
+
+          <ElFormItem v-if="todoStore.settings.gitSync.enabled" label="自动同步">
+            <div class="flex items-center gap-2">
+              <ElSwitch v-model="todoStore.settings.gitSync.autoSync" @change="handleGitAutoSyncChange" />
+              <span class="text-sm text-gray-600">
+                {{ todoStore.settings.gitSync.autoSync ? '每天自动同步' : '手动同步' }}
+              </span>
+            </div>
+          </ElFormItem>
+
+          <ElFormItem v-if="todoStore.settings.gitSync.enabled" label="同步操作">
+            <div class="flex gap-2">
+              <ElButton type="primary" size="small" @click="initializeGitSync">
+                初始化同步
+              </ElButton>
+              <ElButton type="success" size="small" @click="manualSync">
+                手动同步
+              </ElButton>
+              <ElButton type="warning" size="small" @click="testGitPushAuth">
+                测试推送权限
+              </ElButton>
+            </div>
+          </ElFormItem>
+
+          <ElFormItem v-if="todoStore.settings.gitSync.lastSyncTime" label="最后同步时间">
+            <span class="text-sm text-gray-500">
+              {{ formatSyncTime(todoStore.settings.gitSync.lastSyncTime) }}
+            </span>
+          </ElFormItem>
+
+          <ElFormItem label="调试操作">
+            <div class="flex gap-2">
+              <ElButton type="info" size="small" @click="checkGitRemoteUrl">
+                检查Git URL
+              </ElButton>
+              <ElButton type="success" size="small" @click="updateGitRemoteUrl">
+                更新Git URL
+              </ElButton>
+              <ElButton type="warning" size="small" @click="resetGitSyncSettings">
+                重置Git设置
+              </ElButton>
+            </div>
           </ElFormItem>
         </div>
 

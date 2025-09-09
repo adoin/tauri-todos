@@ -11,4 +11,10 @@ export const defaultTodoSettings: TodoSettings = {
     border: '#29cdcd',
   },
   archiveDays: 30, // 默认30天后归档
+  gitSync: {
+    enabled: false, // 默认关闭Git同步
+    repositoryUrl: '', // 空的仓库地址
+    sshKeyPath: '', // SSH密钥文件路径
+    autoSync: true, // 默认启用自动同步
+  },
 }
