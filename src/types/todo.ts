@@ -27,7 +27,11 @@ export interface TodoSettings {
   gitSync: {
     enabled: boolean // 是否启用Git同步
     repositoryUrl: string // Git仓库地址
-    sshKeyPath?: string // SSH密钥文件路径
+    authMethod: 'https' | 'ssh' // 认证方式：HTTPS+PAT 或 SSH+私钥
+    // HTTPS认证配置
+    accessToken?: string // Personal Access Token
+    // SSH认证配置
+    sshKeyPath?: string // SSH私钥文件路径
     lastSyncTime?: string // 最后同步时间
     autoSync: boolean // 是否自动同步
   }

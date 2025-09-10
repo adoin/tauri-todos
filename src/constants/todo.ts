@@ -14,7 +14,9 @@ export const defaultTodoSettings: TodoSettings = {
   gitSync: {
     enabled: false, // 默认关闭Git同步
     repositoryUrl: '', // 空的仓库地址
-    sshKeyPath: '', // SSH密钥文件路径
+    authMethod: 'https' as const, // 默认使用HTTPS认证
+    accessToken: '', // Personal Access Token
+    sshKeyPath: '', // SSH私钥文件路径
     autoSync: true, // 默认启用自动同步
   },
 }

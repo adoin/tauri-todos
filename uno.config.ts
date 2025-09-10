@@ -43,9 +43,4 @@ export default defineConfig({
     transformerDirectives(),
     transformerVariantGroup(),
   ],
-  safelist: [
-    'i-carbon-settings',
-    'i-carbon-close',
-    'i-carbon-drag',
-  ],
 })

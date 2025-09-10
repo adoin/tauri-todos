@@ -519,7 +519,9 @@ export const useTodoStore = defineStore('todo', () => {
       loading.value = true
       const result = await invoke('initialize_git_sync', {
         repositoryUrl: settings.value.gitSync.repositoryUrl,
+        authMethod: settings.value.gitSync.authMethod,
         sshKeyPath: settings.value.gitSync.sshKeyPath,
+        accessToken: settings.value.gitSync.accessToken,
       })
       settings.value.gitSync.lastSyncTime = new Date().toISOString()
       await saveSettings()

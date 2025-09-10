@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ElButton, ElColorPicker, ElDialog, ElForm, ElFormItem, ElInput, ElMessage, ElMessageBox, ElOption, ElSelect, ElSlider, ElSwitch } from 'element-plus'
+import { ElButton, ElColorPicker, ElDialog, ElForm, ElFormItem, ElInput, ElMessage, ElMessageBox, ElOption, ElRadio, ElRadioGroup, ElSelect, ElSlider, ElSwitch } from 'element-plus'
 import { useAppStore } from '../store/app'
 import { useTodoStore } from '../store/todo'
 
@@ -87,9 +87,12 @@ async function updateGitSyncEnabled(enabled: boolean) {
 async function updateGitRepositoryUrl() {
   const url = todoStore.settings.gitSync.repositoryUrl.trim()
 
-  // 校验SSH格式
-  if (url && !isValidSSHUrl(url)) {
-    ElMessage.error('请输入正确的SSH格式Git仓库地址，例如：git@github.com:username/repo.git')
+  // 根据认证方式校验URL格式
+  if (url && !isValidGitUrl(url, todoStore.settings.gitSync.authMethod)) {
+    const example = todoStore.settings.gitSync.authMethod === 'https'
+      ? 'https://github.com/username/repo.git'
+      : 'git@github.com:username/repo.git'
+    ElMessage.error(`请输入正确的${todoStore.settings.gitSync.authMethod.toUpperCase()}格式Git仓库地址，例如：${example}`)
     return
   }
 
@@ -99,6 +102,35 @@ async function updateGitRepositoryUrl() {
       repositoryUrl: url,
     },
   })
+}
+
+async function handleAuthMethodChange() {
+  try {
+    // 切换认证方式时清空相关字段
+    if (todoStore.settings.gitSync.authMethod === 'https') {
+      todoStore.settings.gitSync.sshKeyPath = ''
+    }
+    else {
+      todoStore.settings.gitSync.accessToken = ''
+    }
+    await todoStore.saveSettings()
+    ElMessage.success('认证方式已更新')
+  }
+  catch (error) {
+    console.error('更新认证方式失败:', error)
+    ElMessage.error('更新认证方式失败')
+  }
+}
+
+async function updateAccessToken() {
+  try {
+    await todoStore.saveSettings()
+    ElMessage.success('Access Token已更新')
+  }
+  catch (error) {
+    console.error('更新Access Token失败:', error)
+    ElMessage.error('更新Access Token失败')
+  }
 }
 
 async function updateSSHKeyPath() {
@@ -129,10 +161,17 @@ async function selectSSHKeyFile() {
   }
 }
 
-function isValidSSHUrl(url: string): boolean {
-  // 检查SSH格式：git@hostname:path
-  const sshPattern = /^git@[a-zA-Z0-9.-]+:[\w./-]+\.git$/
-  return sshPattern.test(url)
+function isValidGitUrl(url: string, authMethod: 'https' | 'ssh'): boolean {
+  if (authMethod === 'https') {
+    // 检查HTTPS格式：https://hostname/path.git
+    const httpsPattern = /^https:\/\/[a-zA-Z0-9.-]+\/[\w./-]+\.git$/
+    return httpsPattern.test(url)
+  }
+  else {
+    // 检查SSH格式：git@hostname:path.git
+    const sshPattern = /^git@[a-zA-Z0-9.-]+:[\w./-]+\.git$/
+    return sshPattern.test(url)
+  }
 }
 
 async function updateGitAutoSync(autoSync: boolean) {
@@ -160,16 +199,27 @@ async function initializeGitSync() {
       return
     }
 
-    // 校验SSH格式
-    if (!isValidSSHUrl(todoStore.settings.gitSync.repositoryUrl)) {
-      ElMessage.error('请输入正确的SSH格式Git仓库地址，例如：git@github.com:username/repo.git')
+    // 根据认证方式校验URL格式
+    if (!isValidGitUrl(todoStore.settings.gitSync.repositoryUrl, todoStore.settings.gitSync.authMethod)) {
+      const example = todoStore.settings.gitSync.authMethod === 'https'
+        ? 'https://github.com/username/repo.git'
+        : 'git@github.com:username/repo.git'
+      ElMessage.error(`请输入正确的${todoStore.settings.gitSync.authMethod.toUpperCase()}格式Git仓库地址，例如：${example}`)
       return
     }
 
-    // 检查SSH密钥路径
-    if (!todoStore.settings.gitSync.sshKeyPath || todoStore.settings.gitSync.sshKeyPath.trim() === '') {
-      ElMessage.error('SSH格式的仓库地址需要设置SSH密钥文件路径')
-      return
+    // 检查认证信息
+    if (todoStore.settings.gitSync.authMethod === 'ssh') {
+      if (!todoStore.settings.gitSync.sshKeyPath || todoStore.settings.gitSync.sshKeyPath.trim() === '') {
+        ElMessage.error('SSH认证需要设置SSH私钥文件路径')
+        return
+      }
+    }
+    else {
+      if (!todoStore.settings.gitSync.accessToken || todoStore.settings.gitSync.accessToken.trim() === '') {
+        ElMessage.error('HTTPS认证需要设置Personal Access Token')
+        return
+      }
     }
 
     ElMessage.info('正在初始化Git同步...')
@@ -189,9 +239,12 @@ async function manualSync() {
       return
     }
 
-    // 校验SSH格式
-    if (!isValidSSHUrl(todoStore.settings.gitSync.repositoryUrl)) {
-      ElMessage.error('请输入正确的SSH格式Git仓库地址，例如：git@github.com:username/repo.git')
+    // 根据认证方式校验URL格式
+    if (!isValidGitUrl(todoStore.settings.gitSync.repositoryUrl, todoStore.settings.gitSync.authMethod)) {
+      const example = todoStore.settings.gitSync.authMethod === 'https'
+        ? 'https://github.com/username/repo.git'
+        : 'git@github.com:username/repo.git'
+      ElMessage.error(`请输入正确的${todoStore.settings.gitSync.authMethod.toUpperCase()}格式Git仓库地址，例如：${example}`)
       return
     }
 
@@ -282,9 +335,12 @@ async function testGitPushAuth() {
       return
     }
 
-    // 校验SSH格式
-    if (!isValidSSHUrl(todoStore.settings.gitSync.repositoryUrl)) {
-      ElMessage.error('请输入正确的SSH格式Git仓库地址，例如：git@github.com:username/repo.git')
+    // 根据认证方式校验URL格式
+    if (!isValidGitUrl(todoStore.settings.gitSync.repositoryUrl, todoStore.settings.gitSync.authMethod)) {
+      const example = todoStore.settings.gitSync.authMethod === 'https'
+        ? 'https://github.com/username/repo.git'
+        : 'git@github.com:username/repo.git'
+      ElMessage.error(`请输入正确的${todoStore.settings.gitSync.authMethod.toUpperCase()}格式Git仓库地址，例如：${example}`)
       return
     }
 
@@ -479,17 +535,54 @@ async function checkLocalFiles() {
             </div>
           </ElFormItem>
 
+          <ElFormItem v-if="todoStore.settings.gitSync.enabled" label="认证方式">
+            <ElRadioGroup v-model="todoStore.settings.gitSync.authMethod" @change="handleAuthMethodChange">
+              <ElRadio value="https">
+                HTTPS + Personal Access Token
+              </ElRadio>
+              <ElRadio value="ssh">
+                SSH + 私钥文件
+              </ElRadio>
+            </ElRadioGroup>
+          </ElFormItem>
+
           <ElFormItem v-if="todoStore.settings.gitSync.enabled" label="Git仓库地址">
             <ElInput
               v-model="todoStore.settings.gitSync.repositoryUrl"
-              placeholder="git@github.com:username/repo.git"
+              :placeholder="todoStore.settings.gitSync.authMethod === 'https'
+                ? 'https://github.com/username/repo.git'
+                : 'git@github.com:username/repo.git'"
               @change="updateGitRepositoryUrl"
             />
             <div class="text-xs text-gray-500 mt-1">
-              请输入SSH格式的Git仓库地址
+              {{ todoStore.settings.gitSync.authMethod === 'https'
+                ? '请输入HTTPS格式的Git仓库地址'
+                : '请输入SSH格式的Git仓库地址' }}
             </div>
           </ElFormItem>
-          <ElFormItem v-if="todoStore.settings.gitSync.enabled" label="SSH密钥文件路径">
+
+          <!-- HTTPS认证配置 -->
+          <ElFormItem
+            v-if="todoStore.settings.gitSync.enabled && todoStore.settings.gitSync.authMethod === 'https'"
+            label="Personal Access Token"
+          >
+            <ElInput
+              v-model="todoStore.settings.gitSync.accessToken"
+              type="password"
+              placeholder="ghp_xxxxxxxxxxxxxxxxxxxx"
+              show-password
+              @change="updateAccessToken"
+            />
+            <div class="text-xs text-gray-500 mt-1">
+              GitHub Personal Access Token，需要repo权限
+            </div>
+          </ElFormItem>
+
+          <!-- SSH认证配置 -->
+          <ElFormItem
+            v-if="todoStore.settings.gitSync.enabled && todoStore.settings.gitSync.authMethod === 'ssh'"
+            label="SSH私钥文件路径"
+          >
             <div class="flex gap-2">
               <ElInput
                 v-model="todoStore.settings.gitSync.sshKeyPath"
