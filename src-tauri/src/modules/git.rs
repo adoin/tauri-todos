@@ -109,7 +109,7 @@ pub async fn initialize_git_sync(
     
     let data_dir = dirs::data_dir()
         .ok_or("Failed to get data directory")?
-        .join("ton")
+        .join("Ton")
         .join("data");
 
     let sync_dir = data_dir.join("sync");
@@ -346,7 +346,7 @@ pub async fn initialize_git_sync(
 pub async fn sync_todos_with_git(config: GitSyncConfig) -> Result<String, String> {
     let data_dir = dirs::data_dir()
         .ok_or("Failed to get data directory")?
-        .join("ton")
+        .join("Ton")
         .join("data");
 
     let sync_dir = data_dir.join("sync");
@@ -439,7 +439,7 @@ pub async fn sync_todos_with_git(config: GitSyncConfig) -> Result<String, String
 pub fn check_git_remote_url() -> Result<String, String> {
     let data_dir = dirs::data_dir()
         .ok_or("Failed to get data directory")?
-        .join("ton")
+        .join("Ton")
         .join("data");
 
     let sync_dir = data_dir.join("sync");
@@ -478,7 +478,7 @@ pub fn update_git_remote_url(new_url: String) -> Result<String, String> {
 pub fn get_git_sync_status() -> Result<serde_json::Value, String> {
     let data_dir = dirs::data_dir()
         .ok_or("Failed to get data directory")?
-        .join("ton")
+        .join("Ton")
         .join("data");
 
     let sync_dir = data_dir.join("sync");

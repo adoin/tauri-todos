@@ -81,7 +81,6 @@ const saveState = async () => {
       windowPosition: windowPosition.value,
     }
     await invoke('save_app_state', { state })
-    console.log('App state saved successfully')
   } catch (error) {
     console.error('Failed to save app state:', error)
   }
@@ -105,7 +104,6 @@ const loadState = async () => {
         windowPosition.value = { ...state.windowPosition }
       }
       
-      console.log('App state loaded successfully')
     }
   } catch (error) {
     console.error('Failed to load app state:', error)

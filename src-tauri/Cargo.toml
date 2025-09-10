@@ -19,7 +19,7 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = ["tray-icon", "image-ico", "image-png"] }
-libloading = "0.8"
+libloading = { version = "0.8", optional = true }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
@@ -30,4 +30,8 @@ gix = { version = "0.73", features = ["blocking-http-transport-reqwest", "creden
 chrono = { version = "0.4", features = ["serde"] }
 reqwest = { version = "0.12", features = ["json"] }
 tokio = { version = "1", features = ["rt-multi-thread", "macros"] }
+
+[features]
+default = []
+windows = ["libloading"]
 

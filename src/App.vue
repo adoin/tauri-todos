@@ -25,22 +25,25 @@ function rgb2rgba(rgb: string, opacity: number) {
   return rgb.replace('RGB(', 'RGBA(').replace(')', `, ${opacity})`).toLowerCase()
 }
 // 计算 CSS 变量
-const cssVariables = computed(() => ({
-  // 窗口配置
-  '--window-width': `${appStore.windowConfig.width}px`,
-  '--window-height': `${appStore.windowConfig.height}px`,
-  '--window-opacity': appStore.isTransparent ? appStore.windowConfig.opacity : 1,
-  '--window-border-radius': `${appStore.windowConfig.borderRadius}px`,
-  '--window-border-width': `${appStore.windowConfig.borderWidth}px`,
-  '--window-border-color': appStore.windowConfig.borderColor,
-  '--window-background': appStore.isTransparent ? 'transparent' : rgb2rgba(todoStore.settings.colors.background, appStore.windowConfig.opacity),
-  // 待办事项颜色配置
-  '--todo-normal-color': todoStore.settings.colors.normal,
-  '--todo-warning-color': todoStore.settings.colors.warning,
-  '--todo-urgent-color': todoStore.settings.colors.urgent,
-  '--todo-completed-color': todoStore.settings.colors.completed,
-  '--todo-border-color': todoStore.settings.colors.border,
-}))
+const cssVariables = computed(() => {
+  const variables = {
+    // 窗口配置
+    '--window-width': `${appStore.windowConfig.width}px`,
+    '--window-height': `${appStore.windowConfig.height}px`,
+    '--window-opacity': appStore.isTransparent ? appStore.windowConfig.opacity : 1,
+    '--window-border-radius': `${appStore.windowConfig.borderRadius}px`,
+    '--window-border-width': `${appStore.windowConfig.borderWidth}px`,
+    '--window-border-color': appStore.windowConfig.borderColor,
+    '--window-background': appStore.isTransparent ? 'transparent' : rgb2rgba(todoStore.settings.colors.background, appStore.windowConfig.opacity),
+    // 待办事项颜色配置
+    '--todo-normal-color': todoStore.settings.colors.normal,
+    '--todo-warning-color': todoStore.settings.colors.warning,
+    '--todo-urgent-color': todoStore.settings.colors.urgent,
+    '--todo-completed-color': todoStore.settings.colors.completed,
+    '--todo-border-color': todoStore.settings.colors.border,
+  }
+  return variables
+})
 </script>
 
 <template>

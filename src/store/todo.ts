@@ -64,7 +64,7 @@ export const useTodoStore = defineStore('todo', () => {
       await invoke('save_settings', { settings: settings.value })
     }
     catch (err) {
-      console.error('Failed to save settings:', err)
+      console.error('❌ Failed to save settings:', err)
       throw err
     }
   }
@@ -110,6 +110,7 @@ export const useTodoStore = defineStore('todo', () => {
   const loadSettings = async () => {
     try {
       const settingsData = await invoke('load_settings') as TodoSettings
+
       // 确保gitSync字段存在，如果不存在则使用默认值
       const mergedSettings = {
         ...defaultTodoSettings,
@@ -122,7 +123,7 @@ export const useTodoStore = defineStore('todo', () => {
       settings.value = mergedSettings
     }
     catch (err) {
-      console.error('Failed to load settings:', err)
+      console.error('❌ Failed to load settings:', err)
       // 如果加载设置失败，使用默认设置
       settings.value = { ...defaultTodoSettings }
     }
@@ -347,8 +348,6 @@ export const useTodoStore = defineStore('todo', () => {
       todos.value.source = 'manual'
 
       await saveTodos()
-
-      console.log(`已归档 ${completedTodos.length} 个待办事项`)
     }
     catch (err) {
       console.error('归档失败:', err)
@@ -381,11 +380,18 @@ export const useTodoStore = defineStore('todo', () => {
     }
 
     const timeStatus = getTodoTimeStatus(todo)
+    let color: string
     switch (timeStatus) {
-      case 'urgent': return settings.value.colors.urgent
-      case 'warning': return settings.value.colors.warning
-      default: return settings.value.colors.normal
+      case 'urgent':
+        color = settings.value.colors.urgent
+        break
+      case 'warning':
+        color = settings.value.colors.warning
+        break
+      default:
+        color = settings.value.colors.normal
     }
+    return color
   }
 
   // 监听数据变化并自动归档
@@ -402,8 +408,6 @@ export const useTodoStore = defineStore('todo', () => {
   // 导出待办数据
   const exportTodos = async () => {
     try {
-      console.log('开始导出待办数据...')
-
       const exportData = {
         todos: todos.value.data,
         exportedAt: new Date().toISOString(),
@@ -411,17 +415,14 @@ export const useTodoStore = defineStore('todo', () => {
       }
 
       const dataStr = JSON.stringify(exportData, null, 2)
-      console.log('数据准备完成，大小:', dataStr.length, '字符')
 
       // 生成默认文件名（包含日期时间）
       const now = new Date()
       const dateStr = now.toISOString().split('T')[0] // YYYY-MM-DD
       const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-') // HH-MM-SS
       const defaultFileName = `todos-backup-${dateStr}-${timeStr}.json`
-      console.log('默认文件名:', defaultFileName)
 
       // 使用Tauri的save dialog
-      console.log('打开保存对话框...')
       const filePath = await save({
         defaultPath: defaultFileName,
         filters: [
@@ -432,19 +433,14 @@ export const useTodoStore = defineStore('todo', () => {
         ],
       })
 
-      console.log('用户选择的文件路径:', filePath)
-
       if (filePath) {
-        console.log('开始写入文件到:', filePath)
         // 使用Tauri的fs插件写入文件
         const encoder = new TextEncoder()
         const dataBytes = encoder.encode(dataStr)
         await writeFile(filePath, dataBytes)
-        console.log('文件写入成功')
         ElMessage.success(`待办数据导出成功: ${filePath}`)
       }
       else {
-        console.log('用户取消了保存')
         ElMessage.info('导出已取消')
       }
     }
@@ -525,7 +521,6 @@ export const useTodoStore = defineStore('todo', () => {
       })
       settings.value.gitSync.lastSyncTime = new Date().toISOString()
       await saveSettings()
-      console.log('Git同步初始化成功:', result)
     }
     catch (err) {
       error.value = err instanceof Error ? err.message : 'Git同步初始化失败'
@@ -548,8 +543,6 @@ export const useTodoStore = defineStore('todo', () => {
 
       // 重新加载数据以获取最新状态
       await loadTodos()
-
-      console.log('Git同步成功:', result)
     }
     catch (err) {
       error.value = err instanceof Error ? err.message : 'Git同步失败'
@@ -650,7 +643,6 @@ export const useTodoStore = defineStore('todo', () => {
     if (daysDiff >= 1) {
       try {
         await syncWithGit()
-        console.log('自动同步完成')
       }
       catch (err) {
         console.error('自动同步失败:', err)

@@ -20,20 +20,20 @@ pub struct AppState {
 // 保存窗口配置到文件
 #[tauri::command]
 pub fn save_window_config(config: WindowConfig) -> Result<(), String> {
-    let data_dir = dirs::data_dir()
-        .ok_or("Failed to get data directory")?
-        .join("ton")
-        .join("data");
+    let config_dir = dirs::config_dir()
+        .ok_or("Failed to get config directory")?
+        .join("Ton");
 
-    fs::create_dir_all(&data_dir)
-        .map_err(|e| format!("Failed to create data directory: {}", e))?;
+    if !config_dir.exists() {
+        fs::create_dir_all(&config_dir)
+            .map_err(|e| format!("Failed to create config directory: {}", e))?;
+    }
 
-    let config_file = data_dir.join("window_config.json");
-    let config_str = serde_json::to_string_pretty(&config)
-        .map_err(|e| format!("Failed to serialize window config: {}", e))?;
+    let config_path = config_dir.join("window-config.json");
+    let json = serde_json::to_string_pretty(&config)
+        .map_err(|e| format!("Failed to serialize config: {}", e))?;
 
-    fs::write(&config_file, config_str)
-        .map_err(|e| format!("Failed to write window config file: {}", e))?;
+    fs::write(&config_path, json).map_err(|e| format!("Failed to write config file: {}", e))?;
 
     Ok(())
 }
@@ -41,28 +41,27 @@ pub fn save_window_config(config: WindowConfig) -> Result<(), String> {
 // 从文件加载窗口配置
 #[tauri::command]
 pub fn load_window_config() -> Result<WindowConfig, String> {
-    let data_dir = dirs::data_dir()
-        .ok_or("Failed to get data directory")?
-        .join("ton")
-        .join("data");
+    let config_dir = dirs::config_dir()
+        .ok_or("Failed to get config directory")?
+        .join("Ton");
 
-    let config_file = data_dir.join("window_config.json");
-    
-    if !config_file.exists() {
-        // 返回默认配置
+    let config_path = config_dir.join("window-config.json");
+
+    if !config_path.exists() {
+        // Return default config if file doesn't exist - 70% screen height, 30% screen width
         return Ok(WindowConfig {
             x: 100.0,
             y: 100.0,
-            width: 400.0,
-            height: 600.0,
+            width: (1920.0 * 0.3),  // 30% of typical screen width
+            height: (1080.0 * 0.7), // 70% of typical screen height
         });
     }
 
-    let config_str = fs::read_to_string(&config_file)
-        .map_err(|e| format!("Failed to read window config file: {}", e))?;
+    let content = fs::read_to_string(&config_path)
+        .map_err(|e| format!("Failed to read config file: {}", e))?;
 
-    let config: WindowConfig = serde_json::from_str(&config_str)
-        .map_err(|e| format!("Failed to parse window config file: {}", e))?;
+    let config: WindowConfig =
+        serde_json::from_str(&content).map_err(|e| format!("Failed to parse config: {}", e))?;
 
     Ok(config)
 }
@@ -72,7 +71,7 @@ pub fn load_window_config() -> Result<WindowConfig, String> {
 pub fn get_sync_files() -> Result<Vec<String>, String> {
     let data_dir = dirs::data_dir()
         .ok_or("Failed to get data directory")?
-        .join("ton")
+        .join("Ton")
         .join("data");
 
     let sync_dir = data_dir.join("sync");

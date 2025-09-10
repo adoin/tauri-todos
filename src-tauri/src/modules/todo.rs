@@ -38,18 +38,17 @@ pub use crate::modules::git::GitSyncConfig;
 pub fn save_todos(todos: Value) -> Result<(), String> {
     let data_dir = dirs::data_dir()
         .ok_or("Failed to get data directory")?
-        .join("ton")
+        .join("Ton")
         .join("data");
 
-    fs::create_dir_all(&data_dir)
+    std::fs::create_dir_all(&data_dir)
         .map_err(|e| format!("Failed to create data directory: {}", e))?;
 
-    let todos_file = data_dir.join("todos.json");
-    let todos_str = serde_json::to_string_pretty(&todos)
+    let todo_file = data_dir.join("todos.json");
+    let json_str = serde_json::to_string_pretty(&todos)
         .map_err(|e| format!("Failed to serialize todos: {}", e))?;
 
-    fs::write(&todos_file, todos_str)
-        .map_err(|e| format!("Failed to write todos file: {}", e))?;
+    std::fs::write(todo_file, json_str).map_err(|e| format!("Failed to write todo file: {}", e))?;
 
     Ok(())
 }
@@ -59,24 +58,21 @@ pub fn save_todos(todos: Value) -> Result<(), String> {
 pub fn load_todos() -> Result<Value, String> {
     let data_dir = dirs::data_dir()
         .ok_or("Failed to get data directory")?
-        .join("ton")
+        .join("Ton")
         .join("data");
 
-    let todos_file = data_dir.join("todos.json");
-    
-    if !todos_file.exists() {
-        // 返回默认的空todos数组
-        return Ok(serde_json::json!({
-            "data": [],
-            "lastUpdate": chrono::Utc::now().to_rfc3339()
-        }));
+    let todo_file = data_dir.join("todos.json");
+
+    if !todo_file.exists() {
+        // 返回默认的空待办事项数组
+        return Ok(serde_json::json!([]));
     }
 
-    let todos_str = fs::read_to_string(&todos_file)
-        .map_err(|e| format!("Failed to read todos file: {}", e))?;
+    let json_str = std::fs::read_to_string(todo_file)
+        .map_err(|e| format!("Failed to read todo file: {}", e))?;
 
-    let todos: Value = serde_json::from_str(&todos_str)
-        .map_err(|e| format!("Failed to parse todos file: {}", e))?;
+    let todos: Value =
+        serde_json::from_str(&json_str).map_err(|e| format!("Failed to parse todo file: {}", e))?;
 
     Ok(todos)
 }
@@ -86,17 +82,17 @@ pub fn load_todos() -> Result<Value, String> {
 pub fn save_settings(settings: Value) -> Result<(), String> {
     let data_dir = dirs::data_dir()
         .ok_or("Failed to get data directory")?
-        .join("ton")
+        .join("Ton")
         .join("data");
 
-    fs::create_dir_all(&data_dir)
+    std::fs::create_dir_all(&data_dir)
         .map_err(|e| format!("Failed to create data directory: {}", e))?;
 
     let settings_file = data_dir.join("settings.json");
-    let settings_str = serde_json::to_string_pretty(&settings)
+    let json_str = serde_json::to_string_pretty(&settings)
         .map_err(|e| format!("Failed to serialize settings: {}", e))?;
 
-    fs::write(&settings_file, settings_str)
+    std::fs::write(settings_file, json_str)
         .map_err(|e| format!("Failed to write settings file: {}", e))?;
 
     Ok(())
@@ -107,37 +103,31 @@ pub fn save_settings(settings: Value) -> Result<(), String> {
 pub fn load_settings() -> Result<Value, String> {
     let data_dir = dirs::data_dir()
         .ok_or("Failed to get data directory")?
-        .join("ton")
+        .join("Ton")
         .join("data");
 
     let settings_file = data_dir.join("settings.json");
-    
+
     if !settings_file.exists() {
         // 返回默认设置
         return Ok(serde_json::json!({
             "colors": {
-                "primary": "#3b82f6",
-                "secondary": "#64748b",
-                "accent": "#f59e0b",
-                "background": "rgba(255, 255, 255, 0.1)",
-                "text": "#ffffff"
+                "normal": "#1f2937",
+                "warning": "#f59e0b",
+                "urgent": "#ef4444",
+                "completed": "#f5dbd6",
+                "background": "#60a5fa88",
+                "border": "#e5e7eb",
+                "hover": "#f3f4f6"
             },
-            "archive_days": 30,
-            "git_sync": {
-                "enabled": false,
-                "repositoryUrl": "",
-                "authMethod": "https",
-                "accessToken": "",
-                "sshKeyPath": "",
-                "autoSync": false
-            }
+            "archiveDays": 30
         }));
     }
 
-    let settings_str = fs::read_to_string(&settings_file)
+    let json_str = std::fs::read_to_string(settings_file)
         .map_err(|e| format!("Failed to read settings file: {}", e))?;
 
-    let settings: Value = serde_json::from_str(&settings_str)
+    let settings: Value = serde_json::from_str(&json_str)
         .map_err(|e| format!("Failed to parse settings file: {}", e))?;
 
     Ok(settings)
@@ -145,21 +135,20 @@ pub fn load_settings() -> Result<Value, String> {
 
 // 保存应用状态到文件
 #[tauri::command]
-pub fn save_app_state(app_state: Value) -> Result<(), String> {
-    let data_dir = dirs::data_dir()
-        .ok_or("Failed to get data directory")?
-        .join("ton")
-        .join("data");
+pub fn save_app_state(state: Value) -> Result<(), String> {
+    let config_dir = dirs::config_dir()
+        .ok_or("Failed to get config directory")?
+        .join("Ton");
 
-    fs::create_dir_all(&data_dir)
-        .map_err(|e| format!("Failed to create data directory: {}", e))?;
+    std::fs::create_dir_all(&config_dir)
+        .map_err(|e| format!("Failed to create config directory: {}", e))?;
 
-    let app_state_file = data_dir.join("app_state.json");
-    let app_state_str = serde_json::to_string_pretty(&app_state)
-        .map_err(|e| format!("Failed to serialize app state: {}", e))?;
+    let config_file = config_dir.join("app-state.json");
+    let json_str = serde_json::to_string_pretty(&state)
+        .map_err(|e| format!("Failed to serialize state: {}", e))?;
 
-    fs::write(&app_state_file, app_state_str)
-        .map_err(|e| format!("Failed to write app state file: {}", e))?;
+    std::fs::write(config_file, json_str)
+        .map_err(|e| format!("Failed to write state file: {}", e))?;
 
     Ok(())
 }
@@ -167,34 +156,41 @@ pub fn save_app_state(app_state: Value) -> Result<(), String> {
 // 从文件加载应用状态
 #[tauri::command]
 pub fn load_app_state() -> Result<Value, String> {
-    let data_dir = dirs::data_dir()
-        .ok_or("Failed to get data directory")?
-        .join("ton")
-        .join("data");
+    let config_dir = dirs::config_dir()
+        .ok_or("Failed to get config directory")?
+        .join("Ton");
 
-    let app_state_file = data_dir.join("app_state.json");
-    
-    if !app_state_file.exists() {
+    let config_file = config_dir.join("app-state.json");
+
+    if !config_file.exists() {
         // 返回默认状态
         return Ok(serde_json::json!({
             "isTransparent": true,
+            "showBorder": false,
+            "isSettingsOpen": false,
+            "activeToolbar": false,
             "windowConfig": {
-                "x": 100.0,
-                "y": 100.0,
-                "width": 400.0,
-                "height": 600.0
+                "width": 576,
+                "height": 756,
+                "opacity": 0.8,
+                "borderRadius": 8,
+                "borderColor": "#3b82f6",
+                "borderWidth": 2
             },
-            "locale": "zh-CN"
+            "windowPosition": {
+                "x": 100,
+                "y": 100
+            }
         }));
     }
 
-    let app_state_str = fs::read_to_string(&app_state_file)
-        .map_err(|e| format!("Failed to read app state file: {}", e))?;
+    let json_str = std::fs::read_to_string(config_file)
+        .map_err(|e| format!("Failed to read state file: {}", e))?;
 
-    let app_state: Value = serde_json::from_str(&app_state_str)
-        .map_err(|e| format!("Failed to parse app state file: {}", e))?;
+    let state: Value = serde_json::from_str(&json_str)
+        .map_err(|e| format!("Failed to parse state file: {}", e))?;
 
-    Ok(app_state)
+    Ok(state)
 }
 
 // 保存归档的todos到文件
@@ -202,18 +198,18 @@ pub fn load_app_state() -> Result<Value, String> {
 pub fn save_archived_todos(archived_todos: Value) -> Result<(), String> {
     let data_dir = dirs::data_dir()
         .ok_or("Failed to get data directory")?
-        .join("ton")
+        .join("Ton")
         .join("data");
 
-    fs::create_dir_all(&data_dir)
+    std::fs::create_dir_all(&data_dir)
         .map_err(|e| format!("Failed to create data directory: {}", e))?;
 
-    let archived_file = data_dir.join("archived_todos.json");
-    let archived_str = serde_json::to_string_pretty(&archived_todos)
+    let archive_file = data_dir.join("stage.json");
+    let json_str = serde_json::to_string_pretty(&archived_todos)
         .map_err(|e| format!("Failed to serialize archived todos: {}", e))?;
 
-    fs::write(&archived_file, archived_str)
-        .map_err(|e| format!("Failed to write archived todos file: {}", e))?;
+    std::fs::write(archive_file, json_str)
+        .map_err(|e| format!("Failed to write archive file: {}", e))?;
 
     Ok(())
 }
@@ -223,21 +219,23 @@ pub fn save_archived_todos(archived_todos: Value) -> Result<(), String> {
 pub fn load_archived_todos() -> Result<Value, String> {
     let data_dir = dirs::data_dir()
         .ok_or("Failed to get data directory")?
-        .join("ton")
+        .join("Ton")
         .join("data");
 
-    let archived_file = data_dir.join("archived_todos.json");
-    
-    if !archived_file.exists() {
-        // 返回默认的空归档数组
-        return Ok(serde_json::json!([]));
+    let archive_file = data_dir.join("stage.json");
+
+    if !archive_file.exists() {
+        return Ok(serde_json::json!({
+            "todos": [],
+            "archivedAt": ""
+        }));
     }
 
-    let archived_str = fs::read_to_string(&archived_file)
-        .map_err(|e| format!("Failed to read archived todos file: {}", e))?;
+    let json_str = std::fs::read_to_string(archive_file)
+        .map_err(|e| format!("Failed to read archive file: {}", e))?;
 
-    let archived: Value = serde_json::from_str(&archived_str)
-        .map_err(|e| format!("Failed to parse archived todos file: {}", e))?;
+    let archived_todos: Value = serde_json::from_str(&json_str)
+        .map_err(|e| format!("Failed to parse archive file: {}", e))?;
 
-    Ok(archived)
+    Ok(archived_todos)
 }

@@ -66,7 +66,45 @@ pub fn main() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
-            // 简化的setup，移除复杂的Windows API调用
+            // 在启动时就设置窗口层级
+            let window = app.get_webview_window("main").unwrap();
+
+            #[cfg(feature = "windows")]
+            {
+                use std::ffi::c_void;
+                if let Ok(hwnd) = window.hwnd() {
+                    unsafe {
+                        let hwnd_ptr = hwnd.0 as *mut c_void;
+                        let user32 = libloading::Library::new("user32.dll").unwrap();
+                        let set_window_pos: libloading::Symbol<
+                            unsafe extern "system" fn(
+                                *mut c_void,
+                                *mut c_void,
+                                i32,
+                                i32,
+                                i32,
+                                i32,
+                                u32,
+                            ) -> i32,
+                        > = user32.get(b"SetWindowPos").unwrap();
+                        let _set_window_long: libloading::Symbol<
+                            unsafe extern "system" fn(*mut c_void, i32, i32) -> i32,
+                        > = user32.get(b"SetWindowLongA").unwrap();
+                        let _get_window_long: libloading::Symbol<
+                            unsafe extern "system" fn(*mut c_void, i32) -> i32,
+                        > = user32.get(b"GetWindowLongA").unwrap();
+
+                        // 设置窗口样式，使其不能获得焦点 - 注释掉以允许输入框获得焦点
+                        // GWL_EXSTYLE = -20, WS_EX_NOACTIVATE = 0x08000000
+                        // let ex_style = get_window_long(hwnd_ptr, -20);
+                        // set_window_long(hwnd_ptr, -20, ex_style | 0x08000000);
+
+                        // 设置窗口位置到最底层
+                        // HWND_BOTTOM = 1, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE = 0x0013
+                        set_window_pos(hwnd_ptr, 1 as *mut c_void, 0, 0, 0, 0, 0x0013);
+                    }
+                }
+            }
 
             // 创建系统托盘
             let show = MenuItem::with_id(app, "show", "显示", true, None::<&str>)?;
@@ -110,11 +148,67 @@ pub fn main() {
                     } = event {
                         let app = tray.app_handle();
                         if let Some(window) = app.get_webview_window("main") {
-                            if window.is_visible().unwrap_or(false) {
+                            let is_visible = window.is_visible().unwrap_or(false);
+                            if is_visible {
                                 let _ = window.hide();
                             } else {
                                 let _ = window.show();
-                                let _ = window.set_focus();
+                                // 不要设置焦点，避免窗口获得焦点而显示在前台
+                                // let _ = window.set_focus();
+
+                                // 设置窗口到桌面层级
+                                #[cfg(feature = "windows")]
+                                {
+                                    use std::ffi::c_void;
+                                    if let Ok(hwnd) = window.hwnd() {
+                                        unsafe {
+                                            // 使用 Windows API 设置窗口层级
+                                            let hwnd_ptr = hwnd.0 as *mut c_void;
+                                            let user32 =
+                                                libloading::Library::new("user32.dll").unwrap();
+                                            let set_window_pos: libloading::Symbol<
+                                                unsafe extern "system" fn(
+                                                    *mut c_void,
+                                                    *mut c_void,
+                                                    i32,
+                                                    i32,
+                                                    i32,
+                                                    i32,
+                                                    u32,
+                                                )
+                                                    -> i32,
+                                            > = user32.get(b"SetWindowPos").unwrap();
+                                            let _set_window_long: libloading::Symbol<
+                                                unsafe extern "system" fn(
+                                                    *mut c_void,
+                                                    i32,
+                                                    i32,
+                                                )
+                                                    -> i32,
+                                            > = user32.get(b"SetWindowLongA").unwrap();
+                                            let _get_window_long: libloading::Symbol<
+                                                unsafe extern "system" fn(*mut c_void, i32) -> i32,
+                                            > = user32.get(b"GetWindowLongA").unwrap();
+
+                                            // 设置窗口样式，使其不能获得焦点 - 注释掉以允许输入框获得焦点
+                                            // GWL_EXSTYLE = -20, WS_EX_NOACTIVATE = 0x08000000
+                                            // let ex_style = get_window_long(hwnd_ptr, -20);
+                                            // set_window_long(hwnd_ptr, -20, ex_style | 0x08000000);
+
+                                            // 设置窗口位置到最底层
+                                            // HWND_BOTTOM = 1, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE = 0x0013
+                                            set_window_pos(
+                                                hwnd_ptr,
+                                                1 as *mut c_void,
+                                                0,
+                                                0,
+                                                0,
+                                                0,
+                                                0x0013,
+                                            );
+                                        }
+                                    }
+                                }
                             }
                         }
                     }

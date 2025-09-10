@@ -358,7 +358,6 @@ async function checkLocalFiles() {
   try {
     ElMessage.info('正在检查本地同步文件...')
     const result = await todoStore.checkLocalSyncFiles()
-    console.log('本地同步文件:', result)
 
     if (result.exists) {
       ElMessage.success(`找到 ${result.count} 个同步文件`)
@@ -540,7 +539,7 @@ async function checkLocalFiles() {
               <ElRadio value="https">
                 HTTPS + Personal Access Token
               </ElRadio>
-              <ElRadio value="ssh">
+              <ElRadio value="ssh" disabled>
                 SSH + 私钥文件
               </ElRadio>
             </ElRadioGroup>
