@@ -9,6 +9,7 @@ dependencies = [
  "chrono",
  "dirs 5.0.1",
  "gix",
+ "gix-refspec",
  "libloading 0.8.8",
  "reqwest",
  "serde",
@@ -1202,7 +1203,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2dff15bf788c671c1934e366d07e30c1814a8ef514e1af724a602e8a2fbe1b10"
 dependencies = [
  "futures-core",
- "futures-sink",
 ]
 
 [[package]]
@@ -2244,16 +2244,13 @@ version = "0.48.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "12f7cc0179fc89d53c54e1f9ce51229494864ab4bf136132d69db1b011741ca3"
 dependencies = [
- "base64 0.22.1",
  "bstr",
  "gix-command",
- "gix-credentials",
  "gix-features",
  "gix-packetline",
  "gix-quote",
  "gix-sec",
  "gix-url",
- "reqwest",
  "thiserror 2.0.12",
 ]
 
@@ -4419,7 +4416,6 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "encoding_rs",
- "futures-channel",
  "futures-core",
  "futures-util",
  "h2",
