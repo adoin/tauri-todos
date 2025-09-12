@@ -213,7 +213,7 @@ async fn alter_table_structure(pool: &MySqlPool, table_name: &str) -> Result<(),
             let alter_queries = vec![
                 "ALTER TABLE todo_settings_sync ADD COLUMN id INT AUTO_INCREMENT PRIMARY KEY FIRST",
                 "ALTER TABLE todo_settings_sync ADD COLUMN update_time VARCHAR(50) NOT NULL COMMENT '更新时间'",
-                "ALTER TABLE todo_settings_sync ADD COLUMN field_name VARCHAR(100) NOT NULL COMMENT '字段名'",
+                "ALTER TABLE todo_settings_sync ADD COLUMN field_name VARCHAR(100) NOT NULL UNIQUE COMMENT '字段名'",
                 "ALTER TABLE todo_settings_sync ADD COLUMN data_type VARCHAR(50) NOT NULL COMMENT '数据类型'",
                 "ALTER TABLE todo_settings_sync ADD COLUMN field_value TEXT NOT NULL COMMENT '字段值'",
                 "ALTER TABLE todo_settings_sync ADD COLUMN last_update VARCHAR(50) NOT NULL COMMENT '最后更新时间'",
@@ -230,7 +230,7 @@ async fn alter_table_structure(pool: &MySqlPool, table_name: &str) -> Result<(),
                 }
             }
             
-            // 添加唯一约束（如果不存在）
+            // 确保唯一约束存在
             let unique_constraint_query = "ALTER TABLE todo_settings_sync ADD UNIQUE KEY unique_field_name (field_name)";
             if let Err(e) = sqlx::query(unique_constraint_query).execute(pool).await {
                 // 忽略约束已存在的错误
@@ -240,9 +240,42 @@ async fn alter_table_structure(pool: &MySqlPool, table_name: &str) -> Result<(),
             }
         }
         "todo_items_sync" => {
+            // 首先检查是否需要修改现有表结构以支持UUID
+            let check_id_type_query = r#"
+                SELECT DATA_TYPE, CHARACTER_MAXIMUM_LENGTH 
+                FROM information_schema.columns 
+                WHERE table_schema = DATABASE() 
+                AND table_name = 'todo_items_sync' 
+                AND column_name = 'id'
+            "#;
+            
+            if let Ok(rows) = sqlx::query(check_id_type_query).fetch_all(pool).await {
+                if let Some(row) = rows.first() {
+                    let data_type: String = row.get("DATA_TYPE");
+                    let max_length: Option<i64> = row.get("CHARACTER_MAXIMUM_LENGTH");
+                    
+                    // 如果id字段不是VARCHAR(36)，需要修改
+                    if data_type != "varchar" || max_length != Some(36) {
+                        // 修改id字段类型
+                        if let Err(e) = sqlx::query("ALTER TABLE todo_items_sync MODIFY COLUMN id VARCHAR(36) PRIMARY KEY COMMENT '待办事项ID (UUID)'").execute(pool).await {
+                            if !e.to_string().contains("Duplicate column name") {
+                                return Err(format!("修改id字段类型失败: {}", e));
+                            }
+                        }
+                        
+                        // 修改parent_id字段类型
+                        if let Err(e) = sqlx::query("ALTER TABLE todo_items_sync MODIFY COLUMN parent_id VARCHAR(36) NULL COMMENT '父项ID，支持树形结构 (UUID)'").execute(pool).await {
+                            if !e.to_string().contains("Duplicate column name") {
+                                return Err(format!("修改parent_id字段类型失败: {}", e));
+                            }
+                        }
+                    }
+                }
+            }
+            
             let alter_queries = vec![
-                "ALTER TABLE todo_items_sync ADD COLUMN id VARCHAR(50) PRIMARY KEY COMMENT '待办事项ID'",
-                "ALTER TABLE todo_items_sync ADD COLUMN parent_id VARCHAR(50) NULL COMMENT '父项ID，支持树形结构'",
+                "ALTER TABLE todo_items_sync ADD COLUMN id VARCHAR(36) PRIMARY KEY COMMENT '待办事项ID (UUID)'",
+                "ALTER TABLE todo_items_sync ADD COLUMN parent_id VARCHAR(36) NULL COMMENT '父项ID，支持树形结构 (UUID)'",
                 "ALTER TABLE todo_items_sync ADD COLUMN text TEXT NOT NULL COMMENT '待办事项内容'",
                 "ALTER TABLE todo_items_sync ADD COLUMN completed BOOLEAN NOT NULL DEFAULT FALSE COMMENT '是否完成'",
                 "ALTER TABLE todo_items_sync ADD COLUMN created_at VARCHAR(50) NOT NULL COMMENT '创建时间'",
@@ -262,6 +295,27 @@ async fn alter_table_structure(pool: &MySqlPool, table_name: &str) -> Result<(),
                     }
                 }
             }
+            
+            // 添加索引（如果不存在）
+            let index_queries = vec![
+                "ALTER TABLE todo_items_sync ADD INDEX idx_id (id)",
+                "ALTER TABLE todo_items_sync ADD INDEX idx_parent_id (parent_id)",
+                "ALTER TABLE todo_items_sync ADD INDEX idx_completed (completed)",
+                "ALTER TABLE todo_items_sync ADD INDEX idx_is_deleted (is_deleted)",
+                "ALTER TABLE todo_items_sync ADD INDEX idx_last_update (last_update)",
+                "ALTER TABLE todo_items_sync ADD INDEX idx_deadline (deadline)",
+                "ALTER TABLE todo_items_sync ADD INDEX idx_created_timestamp (created_timestamp)",
+                "ALTER TABLE todo_items_sync ADD INDEX idx_updated_timestamp (updated_timestamp)",
+            ];
+            
+            for query in index_queries {
+                if let Err(e) = sqlx::query(query).execute(pool).await {
+                    // 忽略索引已存在的错误
+                    if !e.to_string().contains("Duplicate key name") && !e.to_string().contains("already exists") {
+                        return Err(format!("添加索引失败: {}", e));
+                    }
+                }
+            }
         }
         _ => return Err(format!("未知的表名: {}", table_name)),
     }
@@ -271,12 +325,17 @@ async fn alter_table_structure(pool: &MySqlPool, table_name: &str) -> Result<(),
 
 // 清理重复的设置数据
 async fn cleanup_duplicate_settings(pool: &MySqlPool) -> Result<(), String> {
-    // 删除重复的设置数据，只保留最新的
+    // 使用窗口函数删除重复数据，只保留每个field_name的最新记录
     let cleanup_query = r#"
-        DELETE t1 FROM todo_settings_sync t1
-        INNER JOIN todo_settings_sync t2 
-        WHERE t1.id > t2.id 
-        AND t1.field_name = t2.field_name
+        DELETE FROM todo_settings_sync 
+        WHERE id NOT IN (
+            SELECT id FROM (
+                SELECT id, 
+                       ROW_NUMBER() OVER (PARTITION BY field_name ORDER BY id DESC) as rn
+                FROM todo_settings_sync
+            ) ranked 
+            WHERE rn = 1
+        )
     "#;
     
     sqlx::query(cleanup_query)
@@ -284,7 +343,52 @@ async fn cleanup_duplicate_settings(pool: &MySqlPool) -> Result<(), String> {
         .await
         .map_err(|e| format!("清理重复设置数据失败: {}", e))?;
     
+    // 确保唯一约束存在
+    let ensure_unique_query = "ALTER TABLE todo_settings_sync ADD UNIQUE KEY unique_field_name (field_name)";
+    if let Err(e) = sqlx::query(ensure_unique_query).execute(pool).await {
+        // 忽略约束已存在的错误
+        if !e.to_string().contains("Duplicate key name") && !e.to_string().contains("already exists") {
+            return Err(format!("确保唯一约束失败: {}", e));
+        }
+    }
+    
     Ok(())
+}
+
+// 检查数据完整性
+async fn check_data_integrity(pool: &MySqlPool) -> Result<String, String> {
+    let mut messages: Vec<String> = Vec::new();
+    
+    // 检查设置表重复数据
+    let duplicate_settings_query = r#"
+        SELECT field_name, COUNT(*) as count 
+        FROM todo_settings_sync 
+        GROUP BY field_name 
+        HAVING COUNT(*) > 1
+    "#;
+    
+    let duplicate_rows = sqlx::query(duplicate_settings_query)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| format!("检查设置表重复数据失败: {}", e))?;
+    
+    if !duplicate_rows.is_empty() {
+        messages.push(format!("发现 {} 个重复的设置字段", duplicate_rows.len()));
+    } else {
+        messages.push("设置表数据完整性正常".to_string());
+    }
+    
+    // 检查待办表数据
+    let todo_count_query = "SELECT COUNT(*) as count FROM todo_items_sync WHERE is_deleted = FALSE";
+    let todo_count: i64 = sqlx::query(todo_count_query)
+        .fetch_one(pool)
+        .await
+        .map_err(|e| format!("检查待办数据失败: {}", e))?
+        .get("count");
+    
+    messages.push(format!("待办事项总数: {}", todo_count));
+    
+    Ok(messages.join("；"))
 }
 
 // 检查并初始化数据库表结构
@@ -296,41 +400,45 @@ pub async fn check_and_initialize_tables(
     let pool = pool_guard.as_ref()
         .ok_or("数据库连接未建立")?;
     
-    let mut messages = Vec::new();
+    let mut messages: Vec<String> = Vec::new();
     
     // 检查设置同步表
     let settings_table_exists = table_exists(pool, "todo_settings_sync").await?;
     if !settings_table_exists {
         create_settings_sync_table(pool).await?;
-        messages.push("创建了设置同步表");
+        messages.push("创建了设置同步表".to_string());
     } else {
         let expected_columns = ["id", "update_time", "field_name", "data_type", "field_value", "last_update"];
         let structure_matches = check_table_structure(pool, "todo_settings_sync", &expected_columns).await?;
         if !structure_matches {
             alter_table_structure(pool, "todo_settings_sync").await?;
-            messages.push("更新了设置同步表结构");
+            messages.push("更新了设置同步表结构".to_string());
         } else {
-            messages.push("设置同步表结构正常");
+            messages.push("设置同步表结构正常".to_string());
         }
         
         // 清理重复的设置数据
         cleanup_duplicate_settings(pool).await?;
-        messages.push("清理了重复的设置数据");
+        messages.push("清理了重复的设置数据".to_string());
+        
+        // 检查数据完整性
+        let integrity_status = check_data_integrity(pool).await?;
+        messages.push(integrity_status);
     }
     
     // 检查待办同步表
     let todos_table_exists = table_exists(pool, "todo_items_sync").await?;
     if !todos_table_exists {
         create_todos_sync_table(pool).await?;
-        messages.push("创建了待办同步表");
+        messages.push("创建了待办同步表".to_string());
     } else {
         let expected_columns = ["id", "parent_id", "text", "completed", "created_at", "completed_at", "deadline", "is_deleted", "last_update"];
         let structure_matches = check_table_structure(pool, "todo_items_sync", &expected_columns).await?;
         if !structure_matches {
             alter_table_structure(pool, "todo_items_sync").await?;
-            messages.push("更新了待办同步表结构");
+            messages.push("更新了待办同步表结构".to_string());
         } else {
-            messages.push("待办同步表结构正常");
+            messages.push("待办同步表结构正常".to_string());
         }
     }
     
@@ -366,8 +474,8 @@ async fn create_settings_sync_table(pool: &MySqlPool) -> Result<(), String> {
 async fn create_todos_sync_table(pool: &MySqlPool) -> Result<(), String> {
     let create_table_sql = r#"
         CREATE TABLE IF NOT EXISTS todo_items_sync (
-            id VARCHAR(50) PRIMARY KEY COMMENT '待办事项ID',
-            parent_id VARCHAR(50) NULL COMMENT '父项ID，支持树形结构',
+            id VARCHAR(36) PRIMARY KEY COMMENT '待办事项ID (UUID)',
+            parent_id VARCHAR(36) NULL COMMENT '父项ID，支持树形结构 (UUID)',
             text TEXT NOT NULL COMMENT '待办事项内容',
             completed BOOLEAN NOT NULL DEFAULT FALSE COMMENT '是否完成',
             created_at VARCHAR(50) NOT NULL COMMENT '创建时间',
@@ -377,11 +485,14 @@ async fn create_todos_sync_table(pool: &MySqlPool) -> Result<(), String> {
             last_update VARCHAR(50) NOT NULL COMMENT '最后更新时间',
             created_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+            INDEX idx_id (id),
             INDEX idx_parent_id (parent_id),
             INDEX idx_completed (completed),
             INDEX idx_is_deleted (is_deleted),
             INDEX idx_last_update (last_update),
-            INDEX idx_deadline (deadline)
+            INDEX idx_deadline (deadline),
+            INDEX idx_created_timestamp (created_timestamp),
+            INDEX idx_updated_timestamp (updated_timestamp)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
     "#;
     
@@ -417,28 +528,8 @@ pub async fn connect_database(
     Ok(())
 }
 
-// 获取远程最后更新时间
-async fn get_remote_last_update(pool: &MySqlPool) -> Result<Option<String>, String> {
-    // 从设置表中获取 last_update
-    let query = "SELECT field_value FROM todo_settings_sync WHERE field_name = 'last_update' ORDER BY id DESC LIMIT 1";
-    
-    match sqlx::query(query)
-        .fetch_optional(pool)
-        .await
-    {
-        Ok(Some(row)) => {
-            let value: String = row.get("field_value");
-            Ok(Some(value))
-        }
-        Ok(None) => {
-            // 如果没有记录，返回None表示远程没有数据
-            Ok(None)
-        }
-        Err(e) => Err(format!("获取远程最后更新时间失败: {}", e)),
-    }
-}
 
-// 同步设置数据（带事务保护）
+// 同步设置数据（智能同步逻辑）
 async fn sync_settings_data(
     pool: &MySqlPool,
     local_settings: &Value,
@@ -450,43 +541,73 @@ async fn sync_settings_data(
     
     let mut synced_count = 0;
     
-    // 将设置对象转换为键值对
-    if let Some(settings_obj) = local_settings.as_object() {
-        for (key, value) in settings_obj {
-            let field_value = serde_json::to_string(value)
-                .map_err(|e| format!("序列化设置值失败: {}", e))?;
-            
-            let data_type = match value {
-                Value::String(_) => "string",
-                Value::Number(_) => "number",
-                Value::Bool(_) => "boolean",
-                Value::Object(_) => "object",
-                Value::Array(_) => "array",
-                Value::Null => "null",
-            };
-            
-            // 插入或更新设置
-            let query = r#"
-                INSERT INTO todo_settings_sync (update_time, field_name, data_type, field_value, last_update)
-                VALUES (?, ?, ?, ?, ?)
-                ON DUPLICATE KEY UPDATE
-                    update_time = VALUES(update_time),
-                    data_type = VALUES(data_type),
-                    field_value = VALUES(field_value),
-                    last_update = VALUES(last_update)
-            "#;
-            
-            sqlx::query(query)
-                .bind(local_last_update)
-                .bind(key)
-                .bind(data_type)
-                .bind(&field_value)
-                .bind(local_last_update)
-                .execute(&mut *tx)
-                .await
-                .map_err(|e| format!("同步设置数据失败: {}", e))?;
-            
-            synced_count += 1;
+    // 检查远程是否有 lastUpdate 字段
+    let remote_last_update_query = "SELECT field_value FROM todo_settings_sync WHERE field_name = 'lastUpdate' LIMIT 1";
+    let remote_last_update = match sqlx::query(remote_last_update_query)
+        .fetch_optional(&mut *tx)
+        .await
+        .map_err(|e| format!("查询远程lastUpdate失败: {}", e))?
+    {
+        Some(row) => {
+            let value: String = row.get("field_value");
+            // 去掉JSON字符串的引号
+            value.trim_matches('"').to_string()
+        }
+        None => String::new(), // 远程没有数据
+    };
+    
+    // 决定同步方向
+    let should_upload = if remote_last_update.is_empty() {
+        // 远程没有数据，直接上传本地数据
+        true
+    } else {
+        // 比较时间戳，本地较新则上传
+        match (chrono::DateTime::parse_from_rfc3339(local_last_update), 
+               chrono::DateTime::parse_from_rfc3339(&remote_last_update)) {
+            (Ok(local_time), Ok(remote_time)) => local_time > remote_time,
+            _ => true, // 解析失败时默认上传本地数据
+        }
+    };
+    
+    if should_upload {
+        // 上传本地设置到远程
+        if let Some(settings_obj) = local_settings.as_object() {
+            for (key, value) in settings_obj {
+                let field_value = serde_json::to_string(value)
+                    .map_err(|e| format!("序列化设置值失败: {}", e))?;
+                
+                let data_type = match value {
+                    Value::String(_) => "string",
+                    Value::Number(_) => "number",
+                    Value::Bool(_) => "boolean",
+                    Value::Object(_) => "object",
+                    Value::Array(_) => "array",
+                    Value::Null => "null",
+                };
+                
+                // 使用 INSERT ... ON DUPLICATE KEY UPDATE 实现逐字段更新
+                let upsert_query = r#"
+                    INSERT INTO todo_settings_sync (update_time, field_name, data_type, field_value, last_update)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON DUPLICATE KEY UPDATE
+                        update_time = VALUES(update_time),
+                        data_type = VALUES(data_type),
+                        field_value = VALUES(field_value),
+                        last_update = VALUES(last_update)
+                "#;
+                
+                sqlx::query(upsert_query)
+                    .bind(local_last_update)
+                    .bind(key)
+                    .bind(data_type)
+                    .bind(&field_value)
+                    .bind(local_last_update)
+                    .execute(&mut *tx)
+                    .await
+                    .map_err(|e| format!("同步设置数据失败: {}", e))?;
+                
+                synced_count += 1;
+            }
         }
     }
     
@@ -652,6 +773,51 @@ async fn download_todos_data(pool: &MySqlPool) -> Result<Vec<Value>, String> {
     Ok(todos)
 }
 
+// 获取远程数据用于比较
+#[tauri::command]
+pub async fn get_remote_data_for_comparison(
+    state: State<'_, DatabaseState>
+) -> Result<Value, String> {
+    let pool_guard = state.pool.lock().await;
+    let pool = pool_guard.as_ref()
+        .ok_or("数据库连接未建立")?;
+    
+    // 获取远程待办数据
+    let remote_todos = download_todos_data(pool).await?;
+    
+    // 获取远程设置数据
+    let remote_settings = download_settings_data(pool).await?;
+    
+    let result = serde_json::json!({
+        "todos": remote_todos,
+        "settings": remote_settings
+    });
+    
+    Ok(result)
+}
+
+// 手动清理重复数据
+#[tauri::command]
+pub async fn cleanup_duplicate_data(
+    state: State<'_, DatabaseState>
+) -> Result<String, String> {
+    let pool_guard = state.pool.lock().await;
+    let pool = pool_guard.as_ref()
+        .ok_or("数据库连接未建立")?;
+    
+    let mut messages: Vec<String> = Vec::new();
+    
+    // 清理设置表重复数据
+    cleanup_duplicate_settings(pool).await?;
+    messages.push("清理了设置表重复数据".to_string());
+    
+    // 检查数据完整性
+    let integrity_status = check_data_integrity(pool).await?;
+    messages.push(integrity_status);
+    
+    Ok(messages.join("；"))
+}
+
 // 保存下载的数据到本地（带事务保护）
 fn save_downloaded_data(todos: &[Value], settings: &Value, last_update: &str) -> Result<(), String> {
     // 保存待办数据
@@ -679,7 +845,7 @@ fn save_downloaded_data(todos: &[Value], settings: &Value, last_update: &str) ->
     }
 }
 
-// 开始数据库同步
+// 开始数据库同步（智能同步逻辑）
 #[tauri::command]
 pub async fn start_database_sync(
     state: State<'_, DatabaseState>
@@ -696,8 +862,20 @@ pub async fn start_database_sync(
         .and_then(|v| v.as_str())
         .unwrap_or(&default_time);
     
-    // 获取远程最后更新时间
-    let remote_last_update = get_remote_last_update(pool).await?;
+    // 检查远程是否有 lastUpdate 字段
+    let remote_last_update_query = "SELECT field_value FROM todo_settings_sync WHERE field_name = 'lastUpdate' LIMIT 1";
+    let remote_last_update = match sqlx::query(remote_last_update_query)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| format!("查询远程lastUpdate失败: {}", e))?
+    {
+        Some(row) => {
+            let value: String = row.get("field_value");
+            // 去掉JSON字符串的引号
+            Some(value.trim_matches('"').to_string())
+        }
+        None => None, // 远程没有数据
+    };
     
     let mut synced_items = 0;
     let remote_last_update_str = remote_last_update.clone().unwrap_or_else(|| "无远程数据".to_string());
@@ -719,7 +897,7 @@ pub async fn start_database_sync(
                 let todos_count = sync_todos_data(pool, todos_data, local_last_update).await?;
                 
                 synced_items = settings_count + todos_count;
-                format!("同步成功，已上传 {} 项数据到远程", synced_items)
+                format!("同步成功，已上传 {} 项数据到远程（本地数据较新）", synced_items)
             } else if remote_time > local_time {
                 // 远程较新，从远程下载
                 let remote_settings = download_settings_data(pool).await?;
@@ -729,13 +907,13 @@ pub async fn start_database_sync(
                 save_downloaded_data(&remote_todos, &remote_settings, &remote_time_str)?;
                 
                 synced_items = remote_todos.len() + remote_settings.as_object().map_or(0, |obj| obj.len());
-                format!("同步成功，已从远程下载 {} 项数据", synced_items)
+                format!("同步成功，已从远程下载 {} 项数据（远程数据较新）", synced_items)
             } else {
-                "数据已是最新版本".to_string()
+                "数据已是最新版本，无需同步".to_string()
             }
         }
         None => {
-            // 远程没有数据，直接上传本地数据
+            // 远程没有数据，直接上传本地数据（首次同步）
             let settings_count = sync_settings_data(pool, &local_settings, local_last_update).await?;
             let empty_vec = vec![];
             let todos_data = local_todos.get("data")
@@ -744,7 +922,7 @@ pub async fn start_database_sync(
             let todos_count = sync_todos_data(pool, todos_data, local_last_update).await?;
             
             synced_items = settings_count + todos_count;
-            format!("同步成功，已上传 {} 项数据到远程（首次同步）", synced_items)
+            format!("首次同步成功，已上传 {} 项数据到远程", synced_items)
         }
     };
     

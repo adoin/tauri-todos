@@ -18,9 +18,19 @@ const hasConfig = ref(false)
 const connectionStatus = ref<'checking' | 'connected' | 'failed' | 'no-config'>('checking')
 const syncData = ref<any>(null)
 const differences = ref<any[]>([])
+const comparing = ref(false)
+const localData = ref<any>(null)
+const remoteData = ref<any>(null)
+const currentStep = ref('')
 
 // 计算属性
 const hasDifferences = computed(() => differences.value.length > 0)
+const canSmartSync = computed(() =>
+  !comparing.value
+  && !loading.value
+  && connectionStatus.value === 'connected'
+  && differences.value.length > 0,
+)
 
 // 打开模态框
 async function open() {
@@ -41,6 +51,10 @@ function resetState() {
   differences.value = []
   loading.value = false
   syncLoading.value = false
+  comparing.value = false
+  localData.value = null
+  remoteData.value = null
+  currentStep.value = ''
 }
 
 // 检查数据库状态
@@ -50,29 +64,37 @@ async function checkDatabaseStatus() {
 
   try {
     // 1. 检查是否有数据库配置
+    currentStep.value = '检查数据库配置...'
     const config = await invoke('load_database_config') as any
     if (!config) {
       connectionStatus.value = 'no-config'
       hasConfig.value = false
+      currentStep.value = ''
       return
     }
 
     hasConfig.value = true
 
     // 2. 测试数据库连接
+    currentStep.value = '测试数据库连接...'
     const isConnected = await invoke('test_database_connection', { config })
     if (!isConnected) {
       connectionStatus.value = 'failed'
+      currentStep.value = ''
       return
     }
 
     connectionStatus.value = 'connected'
 
     // 3. 建立连接并检查表结构
+    currentStep.value = '建立数据库连接...'
     await invoke('connect_database', { config })
+
+    currentStep.value = '检查表结构...'
     await invoke('check_and_initialize_tables')
 
     // 4. 比较数据
+    currentStep.value = ''
     await compareData()
 
     console.log('数据库连接检查完成，状态:', connectionStatus.value)
@@ -80,6 +102,7 @@ async function checkDatabaseStatus() {
   catch (error) {
     console.error('Database check failed:', error)
     connectionStatus.value = 'failed'
+    currentStep.value = ''
     ElMessage.error('数据库连接失败，请检查配置')
   }
   finally {
@@ -89,54 +112,124 @@ async function checkDatabaseStatus() {
 
 // 比较本地和远程数据
 async function compareData() {
+  comparing.value = true
   try {
     // 获取本地数据
+    currentStep.value = '获取本地数据...'
     const localTodos = await invoke('load_todos') as any
     const localSettings = await invoke('load_app_settings') as any
 
-    // 获取远程数据 - 这些函数是内部的，需要通过其他方式获取
-    // 暂时跳过远程数据比较，直接显示连接成功
-    const remoteTodos: any[] = []
-    const remoteSettings: any = {}
+    localData.value = {
+      todos: localTodos.data || [],
+      settings: localSettings,
+    }
+
+    // 获取远程数据
+    currentStep.value = '获取远程数据...'
+    const remoteDataResult = await invoke('get_remote_data_for_comparison') as any
+    remoteData.value = {
+      todos: remoteDataResult.todos || [],
+      settings: remoteDataResult.settings || {},
+    }
 
     // 比较数据差异
-    const diffs = compareDataDifferences(localTodos, remoteTodos, localSettings, remoteSettings)
+    currentStep.value = '分析数据差异...'
+    const diffs = compareDataDifferences(
+      localData.value.todos,
+      remoteData.value.todos,
+      localData.value.settings,
+      remoteData.value.settings,
+    )
     differences.value = diffs
+
+    currentStep.value = ''
   }
   catch (error) {
     console.error('Data comparison failed:', error)
+    currentStep.value = ''
     ElMessage.error('数据比较失败')
+  }
+  finally {
+    comparing.value = false
   }
 }
 
 // 比较数据差异
-function compareDataDifferences(localTodos: any, _remoteTodos: any, _localSettings: any, _remoteSettings: any) {
+function compareDataDifferences(localTodos: any, remoteTodos: any, _localSettings: any, _remoteSettings: any) {
   const diffs: any[] = []
 
-  // 由于我们暂时无法获取真实的远程数据，这里模拟一些差异检测
-  // 实际应用中，这里应该调用后端API来获取远程数据进行比较
+  // 创建本地和远程待办事项的映射
+  const localMap = new Map()
+  const remoteMap = new Map()
 
-  // 检查本地是否有数据
-  const localTodoCount = localTodos.data?.length || 0
-  const localHasData = localTodoCount > 0
+  // 填充本地数据映射
+  localTodos.forEach((todo: any) => {
+    localMap.set(todo.id, todo)
+  })
 
-  if (localHasData) {
-    // 模拟检测到差异（实际应该与远程数据比较）
+  // 填充远程数据映射
+  remoteTodos.forEach((todo: any) => {
+    remoteMap.set(todo.id, todo)
+  })
+
+  // 找出所有唯一的ID
+  const allIds = new Set([...localMap.keys(), ...remoteMap.keys()])
+
+  // 比较每个待办事项
+  allIds.forEach((id) => {
+    const localTodo = localMap.get(id)
+    const remoteTodo = remoteMap.get(id)
+
+    if (!localTodo && remoteTodo) {
+      // 远程有，本地没有
+      diffs.push({
+        type: 'missing_local',
+        id,
+        local: null,
+        remote: remoteTodo,
+        title: '本地缺失待办事项',
+        description: `远程存在但本地缺失: "${remoteTodo.text}"`,
+      })
+    }
+    else if (localTodo && !remoteTodo) {
+      // 本地有，远程没有
+      diffs.push({
+        type: 'missing_remote',
+        id,
+        local: localTodo,
+        remote: null,
+        title: '远程缺失待办事项',
+        description: `本地存在但远程缺失: "${localTodo.text}"`,
+      })
+    }
+    else if (localTodo && remoteTodo) {
+      // 两边都有，比较内容
+      const localText = localTodo.text || ''
+      const remoteText = remoteTodo.text || ''
+      const localCompleted = localTodo.completed || false
+      const remoteCompleted = remoteTodo.completed || false
+
+      if (localText !== remoteText || localCompleted !== remoteCompleted) {
+        diffs.push({
+          type: 'content_diff',
+          id,
+          local: localTodo,
+          remote: remoteTodo,
+          title: '内容不一致',
+          description: `待办事项内容存在差异: "${localText}" vs "${remoteText}"`,
+        })
+      }
+    }
+  })
+
+  // 如果没有差异，添加一个表示数据一致的项目
+  if (diffs.length === 0) {
     diffs.push({
-      type: 'data_exists',
-      title: '检测到本地数据',
-      local: localTodoCount,
-      remote: '未知',
-      description: `本地有 ${localTodoCount} 个待办事项，建议进行同步以确保数据一致性`,
-    })
-  }
-  else {
-    diffs.push({
-      type: 'no_local_data',
-      title: '本地无数据',
-      local: 0,
-      remote: '未知',
-      description: '本地暂无待办事项数据，建议从远程拉取数据',
+      type: 'no_diff',
+      title: '数据完全一致',
+      description: '本地和远程数据完全相同，无需同步',
+      local: localTodos.length,
+      remote: remoteTodos.length,
     })
   }
 
@@ -305,110 +398,214 @@ defineExpose({
 <template>
   <ElDialog
     v-model="visible"
-    title="数据同步"
-    width="600px"
+    width="800px"
     :close-on-click-modal="false"
     @close="close"
   >
-    <div class="sync-modal-content">
-      <!-- 连接状态 -->
-      <div class="connection-status mb-4">
-        <div v-if="loading" class="flex items-center gap-2">
-          <ElLoading size="small" />
-          <span>检查数据库连接...</span>
-        </div>
-
-        <div v-else-if="connectionStatus === 'no-config'" class="text-center py-4">
-          <div class="text-gray-600 mb-4">
-            <svg class="w-12 h-12 mx-auto mb-2 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    <template #header>
+      <div class="flex items-center justify-between w-full">
+        <h3 class="text-lg font-medium">
+          数据同步
+        </h3>
+        <div class="flex items-center gap-2">
+          <!-- 连接状态图标 -->
+          <div v-if="loading || comparing" class="flex items-center gap-1 text-gray-500">
+            <ElLoading size="small" />
+            <span class="text-xs">{{ currentStep || (loading ? '检查中...' : '比较中...') }}</span>
+          </div>
+          <div v-else-if="connectionStatus === 'connected'" class="flex items-center gap-1 text-green-600">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <p class="text-lg font-medium">
-              未配置数据库连接
-            </p>
-            <p class="text-sm text-gray-500">
-              请先配置MySQL数据库连接信息
-            </p>
+            <span class="text-xs">已连接</span>
           </div>
-          <ElButton type="primary" @click="openSettings">
-            去配置
-          </ElButton>
-        </div>
-
-        <div v-else-if="connectionStatus === 'failed'" class="text-center py-4">
-          <div class="text-red-600 mb-4">
-            <svg class="w-12 h-12 mx-auto mb-2 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <div v-else-if="connectionStatus === 'failed'" class="flex items-center gap-1 text-red-600">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <p class="text-lg font-medium">
-              数据库连接失败
-            </p>
-            <p class="text-sm text-gray-500">
-              请检查数据库配置和网络连接
-            </p>
+            <span class="text-xs">连接失败</span>
           </div>
-          <div class="flex gap-2 justify-center">
-            <ElButton @click="checkDatabaseStatus">
-              重新检查
-            </ElButton>
-            <ElButton type="primary" @click="openSettings">
-              检查配置
-            </ElButton>
-          </div>
-        </div>
-
-        <div v-else-if="connectionStatus === 'connected'" class="text-center py-4">
-          <div class="text-green-600 mb-4">
-            <svg class="w-12 h-12 mx-auto mb-2 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          <div v-else-if="connectionStatus === 'no-config'" class="flex items-center gap-1 text-orange-600">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
-            <p class="text-lg font-medium">
-              数据库连接正常
-            </p>
-            <p class="text-sm text-gray-500">
-              已连接到MySQL数据库
-            </p>
+            <span class="text-xs">未配置</span>
           </div>
         </div>
       </div>
-
-      <!-- 数据差异 -->
-      <div v-if="connectionStatus === 'connected'" class="differences-section">
-        <h3 class="text-lg font-medium mb-3">
-          数据比较结果
-        </h3>
-
-        <div v-if="!hasDifferences" class="text-center py-4 text-green-600">
-          <svg class="w-8 h-8 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+    </template>
+    <div class="sync-modal-content">
+      <!-- 未配置状态 -->
+      <div v-if="connectionStatus === 'no-config'" class="text-center py-8">
+        <div class="text-gray-600 mb-6">
+          <svg class="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
-          <p>本地和远程数据完全一致</p>
+          <p class="text-xl font-medium mb-2">
+            未配置数据库连接
+          </p>
+          <p class="text-gray-500">
+            请先配置MySQL数据库连接信息
+          </p>
+        </div>
+        <ElButton type="primary" @click="openSettings">
+          去配置
+        </ElButton>
+      </div>
+
+      <!-- 连接失败状态 -->
+      <div v-else-if="connectionStatus === 'failed'" class="text-center py-8">
+        <div class="text-red-600 mb-6">
+          <svg class="w-16 h-16 mx-auto mb-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <p class="text-xl font-medium mb-2">
+            数据库连接失败
+          </p>
+          <p class="text-gray-500">
+            请检查数据库配置和网络连接
+          </p>
+        </div>
+        <div class="flex gap-3 justify-center">
+          <ElButton @click="checkDatabaseStatus">
+            重新检查
+          </ElButton>
+          <ElButton type="primary" @click="openSettings">
+            检查配置
+          </ElButton>
+        </div>
+      </div>
+
+      <!-- 数据比较区域 -->
+      <div v-else-if="connectionStatus === 'connected'" class="differences-section">
+        <div class="flex items-center justify-between mb-4">
+          <h3 class="text-lg font-medium">
+            数据比较结果
+          </h3>
+          <div v-if="comparing" class="flex items-center gap-2 text-blue-600">
+            <ElLoading size="small" />
+            <span class="text-sm">{{ currentStep || '比较中...' }}</span>
+          </div>
         </div>
 
-        <div v-else class="space-y-3">
+        <!-- 数据完全一致 -->
+        <div v-if="!hasDifferences && !comparing" class="text-center py-8 text-green-600">
+          <svg class="w-12 h-12 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <p class="text-lg font-medium">
+            数据完全一致
+          </p>
+          <p class="text-sm text-gray-500 mt-1">
+            本地和远程数据完全相同，无需同步
+          </p>
+        </div>
+
+        <!-- 数据差异对比 -->
+        <div v-else-if="hasDifferences && !comparing" class="space-y-4">
           <div
             v-for="diff in differences"
-            :key="diff.type"
-            class="border border-orange-200 rounded-lg p-3 bg-orange-50"
+            :key="diff.id || diff.type"
+            class="border rounded-lg p-4"
+            :class="{
+              'border-green-200 bg-green-50': diff.type === 'no_diff',
+              'border-orange-200 bg-orange-50': diff.type !== 'no_diff',
+            }"
           >
-            <div class="flex items-start gap-3">
-              <svg class="w-5 h-5 text-orange-500 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            <!-- 差异标题 -->
+            <div class="flex items-center gap-2 mb-3">
+              <svg
+                class="w-5 h-5"
+                :class="{
+                  'text-green-500': diff.type === 'no_diff',
+                  'text-orange-500': diff.type !== 'no_diff',
+                }"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  v-if="diff.type === 'no_diff'"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
+                <path
+                  v-else
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  stroke-width="2"
+                  d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"
+                />
               </svg>
-              <div class="flex-1">
-                <h4 class="font-medium text-orange-800">
-                  {{ diff.title }}
-                </h4>
-                <p class="text-sm text-orange-700 mt-1">
-                  {{ diff.description }}
-                </p>
-                <div v-if="diff.local !== undefined && diff.remote !== undefined" class="mt-2 text-xs text-orange-600">
-                  <div>本地: {{ diff.local }}</div>
-                  <div>远程: {{ diff.remote }}</div>
+              <h4
+                class="font-medium" :class="{
+                  'text-green-800': diff.type === 'no_diff',
+                  'text-orange-800': diff.type !== 'no_diff',
+                }"
+              >
+                {{ diff.title }}
+              </h4>
+            </div>
+
+            <!-- 左右对比显示 -->
+            <div v-if="diff.type !== 'no_diff'" class="grid grid-cols-2 gap-4">
+              <!-- 本地数据 -->
+              <div class="space-y-2">
+                <div class="text-sm font-medium text-blue-600 border-b border-blue-200 pb-1">
+                  本地数据
+                </div>
+                <div v-if="diff.local" class="p-3 bg-blue-50 rounded border border-blue-200">
+                  <div class="font-medium">
+                    {{ diff.local.text }}
+                  </div>
+                  <div class="text-xs text-gray-500 mt-1">
+                    状态: {{ diff.local.completed ? '已完成' : '未完成' }}
+                  </div>
+                </div>
+                <div v-else class="p-3 bg-gray-50 rounded border border-gray-200 text-gray-500 text-center">
+                  无数据
+                </div>
+              </div>
+
+              <!-- 远程数据 -->
+              <div class="space-y-2">
+                <div class="text-sm font-medium text-green-600 border-b border-green-200 pb-1">
+                  远程数据
+                </div>
+                <div v-if="diff.remote" class="p-3 bg-green-50 rounded border border-green-200">
+                  <div class="font-medium">
+                    {{ diff.remote.text }}
+                  </div>
+                  <div class="text-xs text-gray-500 mt-1">
+                    状态: {{ diff.remote.completed ? '已完成' : '未完成' }}
+                  </div>
+                </div>
+                <div v-else class="p-3 bg-gray-50 rounded border border-gray-200 text-gray-500 text-center">
+                  无数据
                 </div>
               </div>
             </div>
+
+            <!-- 差异描述 -->
+            <div
+              v-if="diff.description" class="mt-3 text-sm" :class="{
+                'text-green-700': diff.type === 'no_diff',
+                'text-orange-700': diff.type !== 'no_diff',
+              }"
+            >
+              {{ diff.description }}
+            </div>
           </div>
+        </div>
+
+        <!-- 比较中状态 -->
+        <div v-else-if="comparing" class="text-center py-8">
+          <ElLoading size="large" />
+          <p class="text-gray-600 mt-3">
+            {{ currentStep || '正在比较本地和远程数据...' }}
+          </p>
         </div>
       </div>
     </div>
@@ -425,6 +622,7 @@ defineExpose({
             v-if="hasDifferences"
             type="warning"
             :loading="syncLoading"
+            :disabled="comparing || loading"
             @click="forcePull"
           >
             强制拉取
@@ -434,6 +632,7 @@ defineExpose({
             v-if="hasDifferences"
             type="info"
             :loading="syncLoading"
+            :disabled="comparing || loading"
             @click="forcePush"
           >
             强制推送
@@ -442,6 +641,7 @@ defineExpose({
           <ElButton
             type="primary"
             :loading="syncLoading"
+            :disabled="!canSmartSync"
             @click="performSync"
           >
             智能同步
@@ -454,16 +654,10 @@ defineExpose({
 
 <style scoped>
 .sync-modal-content {
-  min-height: 300px;
-}
-
-.connection-status {
-  border-bottom: 1px solid #e5e7eb;
-  padding-bottom: 1rem;
+  min-height: 400px;
 }
 
 .differences-section {
-  border-top: 1px solid #e5e7eb;
-  padding-top: 1rem;
+  min-height: 300px;
 }
 </style>

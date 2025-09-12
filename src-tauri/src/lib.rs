@@ -65,7 +65,11 @@ pub fn run() {
             delete_todo_logically,
             restore_todo,
             restore_todo_safe,
-            get_deleted_todos
+            get_deleted_todos,
+            // 数据清理命令
+            cleanup_duplicate_data,
+            // 数据比较命令
+            get_remote_data_for_comparison
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

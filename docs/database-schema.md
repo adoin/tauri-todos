@@ -2,6 +2,8 @@
 
 ## 表结构设计
 
+> **注意**：此文档描述的是最新的数据库表结构，支持 UUID 格式的 ID 字段。
+
 ### 1. 设置同步表 (`todo_settings_sync`)
 
 用于存储应用设置和同步元数据。
@@ -34,32 +36,48 @@ CREATE TABLE todo_settings_sync (
 
 ```sql
 CREATE TABLE todo_items_sync (
-    id VARCHAR(50) PRIMARY KEY COMMENT '待办事项ID',
-    parent_id VARCHAR(50) NULL COMMENT '父项ID，支持树形结构',
+    id VARCHAR(36) PRIMARY KEY COMMENT '待办事项ID (UUID)',
+    parent_id VARCHAR(36) NULL COMMENT '父项ID，支持树形结构 (UUID)',
     text TEXT NOT NULL COMMENT '待办事项内容',
     completed BOOLEAN NOT NULL DEFAULT FALSE COMMENT '是否完成',
     created_at VARCHAR(50) NOT NULL COMMENT '创建时间',
     completed_at VARCHAR(50) NULL COMMENT '完成时间',
     deadline VARCHAR(50) NULL COMMENT '截止时间',
+    is_deleted BOOLEAN NOT NULL DEFAULT FALSE COMMENT '是否已删除（逻辑删除）',
     last_update VARCHAR(50) NOT NULL COMMENT '最后更新时间',
     created_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_id (id),
     INDEX idx_parent_id (parent_id),
     INDEX idx_completed (completed),
+    INDEX idx_is_deleted (is_deleted),
     INDEX idx_last_update (last_update),
-    INDEX idx_deadline (deadline)
+    INDEX idx_deadline (deadline),
+    INDEX idx_created_timestamp (created_timestamp),
+    INDEX idx_updated_timestamp (updated_timestamp)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 ```
 
 **字段说明：**
-- `id`: 待办事项唯一标识符
-- `parent_id`: 父项ID，用于实现树形结构，NULL 表示根级项目
+- `id`: 待办事项唯一标识符（UUID格式，36字符）
+- `parent_id`: 父项ID，用于实现树形结构，NULL 表示根级项目（UUID格式，36字符）
 - `text`: 待办事项文本内容
 - `completed`: 完成状态
 - `created_at`: 创建时间（ISO 字符串）
 - `completed_at`: 完成时间（ISO 字符串）
 - `deadline`: 截止时间（ISO 字符串）
+- `is_deleted`: 逻辑删除标记，用于软删除功能
 - `last_update`: 最后更新时间，用于同步判断
+
+**索引说明：**
+- `idx_id`: 主键索引，优化ID查询性能
+- `idx_parent_id`: 父项ID索引，优化树形结构查询
+- `idx_completed`: 完成状态索引，优化状态筛选
+- `idx_is_deleted`: 删除状态索引，优化软删除查询
+- `idx_last_update`: 更新时间索引，优化同步查询
+- `idx_deadline`: 截止时间索引，优化时间相关查询
+- `idx_created_timestamp`: 创建时间戳索引，优化排序查询
+- `idx_updated_timestamp`: 更新时间戳索引，优化排序查询
 
 ## 同步策略
 
@@ -72,22 +90,12 @@ CREATE TABLE todo_items_sync (
    - 相同时间 → 跳过
 3. **冲突处理**: 以时间戳为准，较新的数据优先
 
-### 同步流程
+### 自动表管理
 
-1. **初始化同步**:
-   - 检查表是否存在
-   - 不存在则创建表
-   - 存在但结构不匹配则尝试修改表结构
-
-2. **数据同步**:
-   - 获取本地和远程的 `last_update` 时间戳
-   - 比较时间戳决定同步方向
-   - 执行数据同步操作
-   - 更新本地 `last_update` 时间戳
-
-3. **自动同步**:
-   - 待办事项变更时触发（防抖 2 秒）
-   - 设置保存时立即同步
+应用会自动：
+- 检查表是否存在
+- 不存在则创建表
+- 存在但结构不匹配则自动修改表结构
 
 ## 安全考虑
 

@@ -21,35 +21,9 @@ export const useAppStore = defineStore('app', () => {
     border: appSettings.value.windowConfig.borderWidth > 0 ? `${appSettings.value.windowConfig.borderWidth}px solid ${appSettings.value.windowConfig.borderColor}` : 'none',
   }))
 
-  // 动作
-  const toggleTransparency = () => {
-    appSettings.value.isTransparent = !appSettings.value.isTransparent
-  }
-
-  const toggleBorder = (show: boolean) => {
-    appSettings.value.windowConfig.borderWidth = show ? 2 : 0
-  }
-
-  const openSettings = () => {
-    isSettingsOpen.value = true
-  }
-
-  const closeSettings = () => {
-    isSettingsOpen.value = false
-  }
-
-  const updateWindowConfig = (config: Partial<WindowConfig>) => {
-    appSettings.value.windowConfig = { ...appSettings.value.windowConfig, ...config }
-  }
-
-  const updateLocale = (newLocale?: LocaleKey) => {
-    appSettings.value.locale = newLocale || defaultLocale
-  }
-
   const saveAppSettings = async () => {
     try {
-      appSettings.value.lastUpdate = new Date().toISOString()
-      await invoke('save_app_settings', { settings: appSettings.value })
+      await invoke('save_app_settings', { settings: { ...appSettings.value, lastUpdate: new Date().toISOString() } })
       // 如果启用了自动同步，立即同步设置
       if (syncStore.autoSyncEnabled && syncStore.isSyncAvailable) {
         try {
@@ -68,13 +42,42 @@ export const useAppStore = defineStore('app', () => {
     }
   }
   const debouncedSaveAppSettings = debounce(saveAppSettings, 1000)
+  // 动作
+  const toggleTransparency = () => {
+    appSettings.value.isTransparent = !appSettings.value.isTransparent
+    debouncedSaveAppSettings()
+  }
+
+  const toggleBorder = (show: boolean) => {
+    appSettings.value.windowConfig.borderWidth = show ? 2 : 0
+  }
+
+  const openSettings = () => {
+    isSettingsOpen.value = true
+  }
+
+  const closeSettings = () => {
+    isSettingsOpen.value = false
+  }
+  const updateWindowConfig = (config: Partial<WindowConfig>) => {
+    appSettings.value.windowConfig = { ...appSettings.value.windowConfig, ...config }
+    debouncedSaveAppSettings()
+  }
+
+  const updateLocale = (newLocale?: LocaleKey) => {
+    appSettings.value.locale = newLocale || defaultLocale
+    debouncedSaveAppSettings()
+  }
+
   const updateAppSettings = async (newSettings: Partial<AppSettings>) => {
     appSettings.value = { ...appSettings.value, ...newSettings }
+    debouncedSaveAppSettings()
   }
 
   const resetColorsToDefault = async () => {
     appSettings.value.colors = { ...defaultAppSettings.colors }
     appSettings.value.windowConfig.borderColor = defaultAppSettings.windowConfig.borderColor
+    debouncedSaveAppSettings()
   }
 
   const loadAppSettings = async () => {
@@ -91,9 +94,6 @@ export const useAppStore = defineStore('app', () => {
       appSettings.value = { ...defaultAppSettings }
     }
   }
-
-  // 监听需要持久化的状态变化
-  watch(() => appSettings.value, debouncedSaveAppSettings, { deep: true })
 
   return {
     // 状态
