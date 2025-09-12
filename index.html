@@ -5,6 +5,43 @@
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Tauri + Vue + Typescript App</title>
+    <style>
+      /* 预加载CSS变量 - 防止样式闪烁 */
+      :root {
+        --window-border-radius: 8px;
+        --window-border-width: 2px;
+        --window-border-color: #3b82f6;
+        --window-background: rgba(255, 255, 255, 0.8);
+        --todo-normal-color: #4f2937;
+        --todo-warning-color: #f59e0b;
+        --todo-urgent-color: #ef4444;
+        --todo-completed-color: #f5dbd6;
+        --todo-border-color: #29cdcd;
+      }
+      
+      /* 基础样式重置 */
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      
+      html, body {
+        width: 100%;
+        height: 100vh;
+        overflow: hidden;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        background: transparent;
+      }
+      
+      #app {
+        width: 100%;
+        height: 100vh;
+        background: transparent;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+    </style>
   </head>
 
   <body style="background: transparent !important; margin: 0; padding: 0;">

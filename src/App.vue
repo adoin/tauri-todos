@@ -43,9 +43,15 @@ function applyCssVariablesToHtml() {
 
 // 组件挂载时应用CSS变量并初始化应用
 onMounted(async () => {
+  // 先应用CSS变量，确保样式正确
   applyCssVariablesToHtml()
+
   // 初始化应用设置
   await appStore.loadAppSettings()
+
+  // 设置加载完成后再次应用CSS变量，确保使用最新配置
+  applyCssVariablesToHtml()
+
   // 配置加载完成后显示窗口
   await showMainWindow()
 })
@@ -74,28 +80,3 @@ watch(() => cssVariables.value, () => {
     </ElConfigProvider>
   </div>
 </template>
-
-<style>
-/* 全局样式重置 */
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
-
-html, body {
-  width: 100%;
-  height: 100vh;
-  overflow: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
-  background: transparent;
-}
-
-#app {
-  width: 100%;
-  height: 100vh;
-  background: transparent;
-  border-radius: 8px;
-  overflow: hidden;
-}
-</style>
