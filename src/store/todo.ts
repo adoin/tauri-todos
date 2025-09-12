@@ -4,6 +4,7 @@ import { save } from '@tauri-apps/plugin-dialog'
 import { writeFile } from '@tauri-apps/plugin-fs'
 import { ElMessage } from 'element-plus'
 import { defineStore } from 'pinia'
+import { v4 as uuidv4 } from 'uuid'
 import { computed, ref, watch } from 'vue'
 import { $confirm } from '../utils/message'
 import { timeUtils } from '../utils/time'
@@ -34,11 +35,6 @@ export const useTodoStore = defineStore('todo', () => {
     }
     return buildTree()
   })
-
-  // 生成唯一ID
-  const generateId = (): string => {
-    return Date.now().toString(36) + Math.random().toString(36).substr(2)
-  }
 
   // 保存待办事项到文件
   const saveTodos = async () => {
@@ -96,7 +92,7 @@ export const useTodoStore = defineStore('todo', () => {
   // 添加待办事项
   const addTodo = async (text: string, parentId?: string, deadline?: string) => {
     const newTodo: TodoItem = {
-      id: generateId(),
+      id: uuidv4(),
       text: text.trim(),
       completed: false,
       createdAt: new Date().toISOString(),
@@ -382,8 +378,6 @@ export const useTodoStore = defineStore('todo', () => {
     }
     catch (error) {
       console.error('导出失败详细错误:', error)
-      console.error('错误类型:', typeof error)
-      console.error('错误构造函数:', error?.constructor?.name)
 
       let errorMessage = '未知错误'
       if (error instanceof Error) {
@@ -453,11 +447,9 @@ export const useTodoStore = defineStore('todo', () => {
     todos,
     loading,
     error,
-
     // 计算属性
     rootTodos,
     todoTree,
-
     // 方法
     addTodo,
     updateTodo,

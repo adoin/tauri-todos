@@ -11,16 +11,16 @@ const appStore = useAppStore()
 
 // 计算当前语言配置
 const locale = computed(() => {
-  const currentLocale = appStore.locale as LocaleKey
+  const currentLocale = appStore.appSettings.locale as LocaleKey
   return locales[currentLocale] || locales['zh-cn']
 })
 // 计算 CSS 变量
 const cssVariables = computed(() => ({
   // 窗口配置
-  '--window-border-radius': `${appStore.windowConfig.borderRadius}px`,
-  '--window-border-width': `${appStore.windowConfig.borderWidth}px`,
-  '--window-border-color': appStore.windowConfig.borderColor,
-  '--window-background': appStore.isTransparent ? 'transparent' : appStore.appSettings.colors.background,
+  '--window-border-radius': `${appStore.appSettings.windowConfig.borderRadius}px`,
+  '--window-border-width': `${appStore.appSettings.windowConfig.borderWidth}px`,
+  '--window-border-color': appStore.appSettings.windowConfig.borderColor,
+  '--window-background': appStore.appSettings.isTransparent ? 'transparent' : appStore.appSettings.colors.background,
   // 待办事项颜色配置
   '--todo-normal-color': appStore.appSettings.colors.normal,
   '--todo-warning-color': appStore.appSettings.colors.warning,

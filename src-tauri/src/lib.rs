@@ -46,8 +46,6 @@ pub fn run() {
             // 数据持久化命令
             save_todos,
             load_todos,
-            save_settings,
-            load_settings,
             save_archived_todos,
             load_archived_todos,
             clear_archived_todos

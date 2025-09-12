@@ -1,44 +1,31 @@
 import type { LocaleKey } from '../constants/locale'
-import type { AppSettings } from '../types/app'
+import type { AppSettings, WindowConfig } from '../types/app'
 import { invoke } from '@tauri-apps/api/core'
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
+import { debounce } from 'xe-utils'
 import { defaultLocale } from '../constants/locale'
 import { defaultAppSettings } from '../constants/todo'
 
 export const useAppStore = defineStore('app', () => {
-  // 悬浮窗口状态
-  const isTransparent = ref(true)
-  const showBorder = ref(false)
   const isSettingsOpen = ref(false)
-
-  // 窗口配置（不包含宽高，宽高由Tauri窗口管理）
-  const windowConfig = ref({
-    borderRadius: 8,
-    borderColor: '#3b82f6',
-    borderWidth: 2,
-  })
-
-  // 语言配置
-  const locale = ref<LocaleKey>(defaultLocale)
 
   // 待办事项设置
   const appSettings = ref<AppSettings>({ ...defaultAppSettings })
 
   // 计算属性
   const windowStyle = computed(() => ({
-    borderRadius: `${windowConfig.value.borderRadius}px`,
-    border: showBorder.value ? `${windowConfig.value.borderWidth}px solid ${windowConfig.value.borderColor}` : 'none',
-    backgroundColor: isTransparent.value ? 'transparent' : 'rgba(255, 255, 255, 0.9)',
+    borderRadius: `${appSettings.value.windowConfig.borderRadius}px`,
+    border: appSettings.value.windowConfig.borderWidth > 0 ? `${appSettings.value.windowConfig.borderWidth}px solid ${appSettings.value.windowConfig.borderColor}` : 'none',
   }))
 
   // 动作
   const toggleTransparency = () => {
-    isTransparent.value = !isTransparent.value
+    appSettings.value.isTransparent = !appSettings.value.isTransparent
   }
 
   const toggleBorder = (show: boolean) => {
-    showBorder.value = show
+    appSettings.value.windowConfig.borderWidth = show ? 2 : 0
   }
 
   const openSettings = () => {
@@ -49,39 +36,41 @@ export const useAppStore = defineStore('app', () => {
     isSettingsOpen.value = false
   }
 
-  const updateWindowConfig = (config: Partial<typeof windowConfig.value>) => {
-    windowConfig.value = { ...windowConfig.value, ...config }
+  const updateWindowConfig = (config: Partial<WindowConfig>) => {
+    appSettings.value.windowConfig = { ...appSettings.value.windowConfig, ...config }
   }
 
-  const updateLocale = (newLocale: LocaleKey) => {
-    locale.value = newLocale
+  const updateLocale = (newLocale?: LocaleKey) => {
+    appSettings.value.locale = newLocale || defaultLocale
   }
 
-  // 待办事项设置相关方法
   const saveAppSettings = async () => {
     try {
-      await invoke('save_settings', { settings: appSettings.value })
+      appSettings.value.lastUpdate = new Date().toISOString()
+      await invoke('save_app_settings', { settings: appSettings.value })
     }
     catch (err) {
       console.error('Failed to save todo settings:', err)
       throw err
     }
   }
-
+  const debouncedSaveAppSettings = debounce(saveAppSettings, 1000)
   const updateAppSettings = async (newSettings: Partial<AppSettings>) => {
     appSettings.value = { ...appSettings.value, ...newSettings }
-    await saveAppSettings()
   }
 
   const resetColorsToDefault = async () => {
-    appSettings.value = { ...appSettings.value, colors: { ...defaultAppSettings.colors } }
-    await saveAppSettings()
+    appSettings.value.colors = { ...defaultAppSettings.colors }
+    appSettings.value.windowConfig.borderColor = defaultAppSettings.windowConfig.borderColor
   }
 
   const loadAppSettings = async () => {
     try {
-      const settingsData = await invoke('load_settings') as AppSettings
-      appSettings.value = { ...defaultAppSettings, ...settingsData }
+      const settingsData = await invoke('load_app_settings') as AppSettings
+      if (settingsData && settingsData.lastUpdate && (!appSettings.value.lastUpdate || new Date(settingsData.lastUpdate) > new Date(appSettings.value.lastUpdate))) {
+        appSettings.value = settingsData
+      }
+      isSettingsOpen.value = false
     }
     catch (err) {
       console.error('Failed to load todo settings:', err)
@@ -90,90 +79,23 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
-  // 保存应用设置到本地 JSON 文件
-  const saveState = async () => {
-    try {
-      const settings = {
-        isTransparent: isTransparent.value,
-        showBorder: showBorder.value,
-        isSettingsOpen: isSettingsOpen.value,
-        windowConfig: windowConfig.value,
-        locale: locale.value,
-        appSettings: appSettings.value,
-      }
-      await invoke('save_app_settings', { settings })
-    }
-    catch (error) {
-      console.error('Failed to save app settings:', error)
-    }
-  }
-
-  // 从本地 JSON 文件加载应用设置
-  const loadState = async () => {
-    try {
-      const settings = await invoke('load_app_settings') as any
-      if (settings) {
-        isTransparent.value = settings.isTransparent ?? true
-        showBorder.value = settings.showBorder ?? false
-        isSettingsOpen.value = false // 设置窗口总是关闭状态启动
-        if (settings.windowConfig) {
-          windowConfig.value = { ...windowConfig.value, ...settings.windowConfig }
-        }
-        if (settings.locale) {
-          locale.value = settings.locale
-        }
-        if (settings.appSettings) {
-          appSettings.value = { ...defaultAppSettings, ...settings.appSettings }
-        }
-      }
-    }
-    catch (error) {
-      console.error('Failed to load app settings:', error)
-    }
-  }
-
-  // 监听状态变化并自动保存（防抖）
-  let saveTimeout: ReturnType<typeof setTimeout> | null = null
-  const debouncedSave = () => {
-    if (saveTimeout)
-      clearTimeout(saveTimeout)
-    saveTimeout = setTimeout(() => {
-      saveState()
-      saveTimeout = null
-    }, 1000) // 1秒防抖
-  }
-
   // 监听需要持久化的状态变化
-  watch([isTransparent, windowConfig, locale, appSettings], debouncedSave, { deep: true })
+  watch(() => appSettings.value, debouncedSaveAppSettings, { deep: true })
 
   return {
     // 状态
-    isTransparent,
-    showBorder,
     isSettingsOpen,
-    windowConfig,
-    locale,
     appSettings,
-    // 计算属性
     windowStyle,
-
-    // 动作
     toggleTransparency,
     toggleBorder,
     openSettings,
     closeSettings,
     updateWindowConfig,
-    updateWindowPosition,
     updateLocale,
-
-    // 待办事项设置相关
     updateAppSettings,
     resetColorsToDefault,
     saveAppSettings,
     loadAppSettings,
-
-    // 持久化相关
-    saveState,
-    loadState,
   }
 })

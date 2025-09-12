@@ -20,6 +20,7 @@ export interface AppSettings {
   // 回收时间设置（天数）
   archiveDays: number
   windowConfig: WindowConfig
+  lastUpdate?: string
 }
 export interface WindowPosition {
   x: number

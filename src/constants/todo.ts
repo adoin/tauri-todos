@@ -3,7 +3,7 @@ import type { AppSettings } from '../types/app'
 // 默认设置
 export const defaultAppSettings: AppSettings = {
   locale: 'zh-cn',
-  isTransparent: true,
+  isTransparent: false,
   windowConfig: {
     borderRadius: 8,
     borderColor: '#3b82f6',

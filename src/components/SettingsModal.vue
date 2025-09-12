@@ -100,7 +100,7 @@ function updateBorderColor(color: string | null) {
           <ElFormItem label="圆角半径">
             <div class="flex items-center gap-3">
               <ElInput
-                v-model.number="appStore.windowConfig.borderRadius"
+                v-model.number="appStore.appSettings.windowConfig.borderRadius"
                 type="number"
                 :min="0"
                 :max="20"
@@ -114,11 +114,12 @@ function updateBorderColor(color: string | null) {
           <ElFormItem label="边框宽度">
             <div class="flex items-center gap-3">
               <ElInput
-                v-model.number="appStore.windowConfig.borderWidth"
+                v-model.number="appStore.appSettings.windowConfig.borderWidth"
                 type="number"
                 :min="0"
                 :max="5"
                 style="width: 120px"
+                placeholder="请输入边框宽度,0表示无边框"
                 @change="(value: string) => updateBorderWidth(Number(value))"
               />
               <span class="text-sm text-gray-500">px</span>
@@ -215,7 +216,7 @@ function updateBorderColor(color: string | null) {
 
           <ElFormItem label="窗口边框颜色">
             <ElColorPicker
-              v-model="appStore.windowConfig.borderColor" show-alpha
+              v-model="appStore.appSettings.windowConfig.borderColor" show-alpha
               :predefine="predefineColors" @change="updateBorderColor"
             />
           </ElFormItem>
@@ -235,15 +236,15 @@ function updateBorderColor(color: string | null) {
 
           <ElFormItem label="背景模式">
             <div class="flex items-center gap-2">
-              <ElSwitch v-model="appStore.isTransparent" />
+              <ElSwitch v-model="appStore.appSettings.isTransparent" />
               <span class="text-sm text-gray-600">
-                {{ appStore.isTransparent ? '透明背景' : '纯色背景' }}
+                {{ appStore.appSettings.isTransparent ? '透明背景' : '纯色背景' }}
               </span>
             </div>
           </ElFormItem>
 
           <ElFormItem label="界面语言">
-            <ElSelect v-model="appStore.locale" style="width: 200px" @change="appStore.updateLocale">
+            <ElSelect v-model="appStore.appSettings.locale" style="width: 200px" @change="appStore.updateLocale">
               <ElOption label="中文" value="zh-cn" />
               <ElOption label="English" value="en" />
             </ElSelect>

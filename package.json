@@ -26,16 +26,19 @@
     "@tauri-apps/plugin-opener": "^2",
     "@unocss/reset": "66.1.0-beta.3",
     "element-plus": "^2.11.1",
+    "uuid": "^10.0.0",
     "katex": "^0.16.21",
     "pinia": "^3.0.1",
     "unocss": "66.1.0-beta.3",
     "vue": "^3.5.13",
-    "vue-router": "^4.5.0"
+    "vue-router": "^4.5.0",
+    "xe-utils": "^3.7.9"
   },
   "devDependencies": {
     "@antfu/eslint-config": "^4.8.1",
     "@tauri-apps/cli": "^2",
     "@vitejs/plugin-vue": "^5.2.1",
+    "@types/uuid": "^10.0.0",
     "cross-env": "^7.0.3",
     "eslint": "^9.22.0",
     "sass": "^1.92.0",

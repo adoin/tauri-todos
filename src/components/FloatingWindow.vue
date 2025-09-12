@@ -84,9 +84,6 @@ async function saveWindowConfig() {
         height: size.height,
       },
     })
-
-    // 更新 store 中的位置
-    appStore.updateWindowPosition({ x: position.x, y: position.y })
   }
   catch (error) {
     console.error('Failed to save window config:', error)
@@ -96,8 +93,6 @@ async function saveWindowConfig() {
 async function loadWindowConfig() {
   try {
     const config = await invoke('load_window_config') as any
-    appStore.updateWindowPosition({ x: config.x, y: config.y })
-
     // 设置窗口位置和尺寸
     const window = getCurrentWindow()
 
@@ -147,15 +142,10 @@ onMounted(async () => {
   window.listen('open-settings', () => {
     appStore.openSettings()
   })
-
-  // 加载应用状态（包含窗口配置和待办事项设置）
-  await Promise.all([
-    appStore.loadState(),
-    appStore.loadAppSettings(),
-  ])
-
   // 加载窗口配置（位置和尺寸）
   await loadWindowConfig()
+  // 加载应用状态（包含窗口配置和待办事项设置）
+  await appStore.loadAppSettings()
 })
 
 onUnmounted(() => {
