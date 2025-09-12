@@ -13,7 +13,6 @@ All dynamic styling uses CSS variables defined in [App.vue](mdc:src/App.vue):
 ```css
 --window-width: 576px
 --window-height: 756px
---window-opacity: 0.8
 --window-border-radius: 8px
 --window-border-width: 2px
 --window-border-color: #3b82f6
