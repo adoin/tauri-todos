@@ -8,6 +8,7 @@ import { computed, ref, watch } from 'vue'
 import { defaultTodoSettings } from '../constants/todo'
 import { $confirm } from '../utils/message'
 import { timeUtils } from '../utils/time'
+import { useSyncStore } from './sync'
 
 export const useTodoStore = defineStore('todo', () => {
   // 状态
@@ -19,6 +20,10 @@ export const useTodoStore = defineStore('todo', () => {
   const settings = ref<TodoSettings>({ ...defaultTodoSettings })
   const loading = ref(false)
   const error = ref<string | null>(null)
+
+  // 同步相关
+  const syncStore = useSyncStore()
+  let syncTimeout: ReturnType<typeof setTimeout> | null = null
 
   // 计算属性
   const rootTodos = computed(() => {
@@ -62,6 +67,17 @@ export const useTodoStore = defineStore('todo', () => {
   const saveSettings = async () => {
     try {
       await invoke('save_settings', { settings: settings.value })
+      
+      // 如果启用了自动同步，立即同步设置
+      if (syncStore.autoSyncEnabled && syncStore.isSyncAvailable) {
+        try {
+          await syncStore.startSync()
+          console.log('设置保存后自动同步完成')
+        } catch (error) {
+          console.error('设置保存后自动同步失败:', error)
+          // 不抛出错误，避免影响设置保存
+        }
+      }
     }
     catch (err) {
       console.error('Failed to save settings:', err)
@@ -504,8 +520,39 @@ export const useTodoStore = defineStore('todo', () => {
     }
   }
 
+  // 自动同步方法
+  const scheduleAutoSync = () => {
+    if (!syncStore.autoSyncEnabled || !syncStore.isSyncAvailable) {
+      return
+    }
+
+    // 清除之前的定时器
+    if (syncTimeout) {
+      clearTimeout(syncTimeout)
+    }
+
+    // 设置新的定时器
+    syncTimeout = setTimeout(async () => {
+      try {
+        await syncStore.startSync()
+        console.log('自动同步完成')
+      } catch (error) {
+        console.error('自动同步失败:', error)
+        // 不显示错误消息，避免打扰用户
+      }
+    }, syncStore.syncDebounceTime)
+  }
+
   // 监听待办事项变化
-  watch(todos, scheduleArchiveCheck, { deep: true })
+  watch(todos, () => {
+    scheduleArchiveCheck()
+    scheduleAutoSync()
+  }, { deep: true })
+
+  // 监听设置变化
+  watch(settings, () => {
+    scheduleAutoSync()
+  }, { deep: true })
 
   return {
     // 状态

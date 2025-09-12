@@ -1,10 +1,15 @@
 <script setup lang="ts">
 import { ElButton, ElColorPicker, ElDialog, ElForm, ElFormItem, ElInput, ElMessage, ElMessageBox, ElOption, ElSelect, ElSlider, ElSwitch } from 'element-plus'
+import { ref } from 'vue'
 import { useAppStore } from '../store/app'
 import { useTodoStore } from '../store/todo'
+import DatabaseConfigModal from './DatabaseConfigModal.vue'
 
 const appStore = useAppStore()
 const todoStore = useTodoStore()
+
+// 数据库配置模态框状态
+const isDatabaseConfigOpen = ref(false)
 
 function closeSettings() {
   appStore.closeSettings()
@@ -72,6 +77,16 @@ function updateBorderColor(color: string | null) {
   if (color) {
     appStore.updateWindowConfig({ borderColor: color })
   }
+}
+
+// 数据库同步相关方法
+function openDatabaseConfig() {
+  isDatabaseConfigOpen.value = true
+}
+
+function onSyncCompleted(result: any) {
+  console.log('同步完成:', result)
+  // 可以在这里添加同步完成后的处理逻辑
 }
 </script>
 
@@ -213,6 +228,22 @@ function updateBorderColor(color: string | null) {
           </ElFormItem>
         </div>
 
+        <!-- 数据同步设置 -->
+        <div class="mb-6">
+          <h3 class="text-lg font-semibold mb-4 pb-2 border-b border-gray-200">
+            数据同步
+          </h3>
+
+          <ElFormItem label="MySQL 同步">
+            <ElButton type="primary" @click="openDatabaseConfig">
+              配置数据库同步
+            </ElButton>
+            <div class="text-sm text-gray-500 mt-1">
+              配置 MySQL 数据库连接，实现多设备数据同步
+            </div>
+          </ElFormItem>
+        </div>
+
         <!-- 行为设置 -->
         <div class="mb-6">
           <h3 class="text-lg font-semibold mb-4 pb-2 border-b border-gray-200">
@@ -249,4 +280,10 @@ function updateBorderColor(color: string | null) {
       </div>
     </template>
   </ElDialog>
+
+  <!-- 数据库配置模态框 -->
+  <DatabaseConfigModal
+    v-model="isDatabaseConfigOpen"
+    @sync-completed="onSyncCompleted"
+  />
 </template>

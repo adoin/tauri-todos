@@ -5,6 +5,7 @@ mod modules;
 
 // 重新导出所有命令
 use modules::*;
+use modules::database::DatabaseState;
 use tauri::Manager;
 
 // 简单的问候命令，保留作为示例
@@ -19,6 +20,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
+        .manage(DatabaseState::default())
         .setup(|app| {
             // 在启动时就设置窗口层级
             let window = app.get_webview_window("main").unwrap();
@@ -50,7 +52,14 @@ pub fn run() {
             load_settings,
             save_archived_todos,
             load_archived_todos,
-            clear_archived_todos
+            clear_archived_todos,
+            // 数据库同步命令
+            save_database_config,
+            load_database_config,
+            test_database_connection,
+            connect_database,
+            check_and_initialize_tables,
+            start_database_sync
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
