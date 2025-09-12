@@ -6,7 +6,8 @@ use sqlx::{MySqlPool, Row};
 use std::sync::Arc;
 
 // 导入数据模块的函数
-use crate::modules::data::{save_todos, load_todos, save_settings, load_settings};
+use crate::modules::data::{save_todos, load_todos};
+use crate::modules::app::{save_app_settings, load_app_settings};
 
 // 数据库配置结构
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -665,7 +666,7 @@ fn save_downloaded_data(todos: &[Value], settings: &Value, last_update: &str) ->
     match save_todos(todo_data) {
         Ok(_) => {
             // 待办数据保存成功，继续保存设置数据
-            match save_settings(settings.clone()) {
+            match save_app_settings(settings.clone()) {
                 Ok(_) => Ok(()),
                 Err(e) => {
                     // 设置数据保存失败，尝试回滚待办数据
@@ -689,7 +690,7 @@ pub async fn start_database_sync(
     
     // 获取本地数据
     let local_todos = load_todos()?;
-    let local_settings = load_settings()?;
+    let local_settings = load_app_settings()?;
     let default_time = chrono::Utc::now().to_rfc3339();
     let local_last_update = local_todos.get("lastUpdate")
         .and_then(|v| v.as_str())

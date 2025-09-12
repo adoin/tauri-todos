@@ -74,7 +74,7 @@ async function checkDatabaseStatus() {
 
     // 4. 比较数据
     await compareData()
-    
+
     console.log('数据库连接检查完成，状态:', connectionStatus.value)
   }
   catch (error) {
@@ -92,7 +92,7 @@ async function compareData() {
   try {
     // 获取本地数据
     const localTodos = await invoke('load_todos') as any
-    const localSettings = await invoke('load_settings') as any
+    const localSettings = await invoke('load_app_settings') as any
 
     // 获取远程数据 - 这些函数是内部的，需要通过其他方式获取
     // 暂时跳过远程数据比较，直接显示连接成功
