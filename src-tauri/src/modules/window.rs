@@ -7,14 +7,15 @@ use tauri::Manager;
 pub fn save_window_config(config: WindowConfig) -> Result<(), String> {
     let config_dir = dirs::config_dir()
         .ok_or("Failed to get config directory")?
-        .join("ton");
+        .join("Ton")
+        .join("config");
 
     if !config_dir.exists() {
         fs::create_dir_all(&config_dir)
             .map_err(|e| format!("Failed to create config directory: {}", e))?;
     }
 
-    let config_path = config_dir.join("window-config.json");
+    let config_path = config_dir.join("window.json");
     let json = serde_json::to_string_pretty(&config)
         .map_err(|e| format!("Failed to serialize config: {}", e))?;
 
@@ -28,9 +29,10 @@ pub fn save_window_config(config: WindowConfig) -> Result<(), String> {
 pub fn load_window_config() -> Result<WindowConfig, String> {
     let config_dir = dirs::config_dir()
         .ok_or("Failed to get config directory")?
-        .join("ton");
+        .join("Ton")
+        .join("config");
 
-    let config_path = config_dir.join("window-config.json");
+    let config_path = config_dir.join("window.json");
 
     if !config_path.exists() {
         // Return default config if file doesn't exist - 70% screen height, 30% screen width

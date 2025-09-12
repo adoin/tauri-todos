@@ -42,9 +42,9 @@ pub fn run() {
             load_window_config,
             show_main_window,
             hide_main_window,
-            // 应用状态命令
-            save_app_state,
-            load_app_state,
+            // 应用设置命令
+            save_app_settings,
+            load_app_settings,
             // 数据持久化命令
             save_todos,
             load_todos,

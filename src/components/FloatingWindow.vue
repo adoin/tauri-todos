@@ -115,11 +115,7 @@ async function loadWindowConfig() {
       height: Math.round(config.height),
     } as PhysicalSize)
 
-    // 更新 store 中的窗口配置
-    appStore.updateWindowConfig({
-      width: config.width,
-      height: config.height,
-    })
+    // 窗口尺寸由Tauri直接管理，不需要更新store
   }
   catch (error) {
     console.error('Failed to load window config:', error)
@@ -231,8 +227,8 @@ onUnmounted(() => {
 
 <style scoped>
 .floating-window {
-  width: var(--window-width, 576px);
-  height: var(--window-height, 756px);
+  width: 100%;
+  height: 100%;
   border-radius: var(--window-border-radius, 8px);
   border: var(--window-border-width, 2px) solid var(--window-border-color, #3b82f6);
   background-color: var(--window-background, transparent);

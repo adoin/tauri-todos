@@ -10,10 +10,8 @@ export const useAppStore = defineStore('app', () => {
   const showBorder = ref(false)
   const isSettingsOpen = ref(false)
 
-  // 窗口配置
+  // 窗口配置（不包含宽高，宽高由Tauri窗口管理）
   const windowConfig = ref({
-    width: 576, // 30% of 1920px
-    height: 756, // 70% of 1080px
     opacity: 0.8,
     borderRadius: 8,
     borderColor: '#3b82f6',
@@ -31,8 +29,6 @@ export const useAppStore = defineStore('app', () => {
 
   // 计算属性
   const windowStyle = computed(() => ({
-    width: `${windowConfig.value.width}px`,
-    height: `${windowConfig.value.height}px`,
     borderRadius: `${windowConfig.value.borderRadius}px`,
     border: showBorder.value ? `${windowConfig.value.borderWidth}px solid ${windowConfig.value.borderColor}` : 'none',
     opacity: windowConfig.value.opacity,
@@ -68,45 +64,41 @@ export const useAppStore = defineStore('app', () => {
     locale.value = newLocale
   }
 
-  // 保存状态到本地 JSON 文件
+  // 保存应用设置到本地 JSON 文件
   const saveState = async () => {
     try {
-      const state = {
+      const settings = {
         isTransparent: isTransparent.value,
         showBorder: showBorder.value,
         isSettingsOpen: isSettingsOpen.value,
         windowConfig: windowConfig.value,
-        windowPosition: windowPosition.value,
         locale: locale.value,
       }
-      await invoke('save_app_state', { state })
+      await invoke('save_app_settings', { settings })
     }
     catch (error) {
-      console.error('Failed to save app state:', error)
+      console.error('Failed to save app settings:', error)
     }
   }
 
-  // 从本地 JSON 文件加载状态
+  // 从本地 JSON 文件加载应用设置
   const loadState = async () => {
     try {
-      const state = await invoke('load_app_state') as any
-      if (state) {
-        isTransparent.value = state.isTransparent ?? true
-        showBorder.value = state.showBorder ?? false
+      const settings = await invoke('load_app_settings') as any
+      if (settings) {
+        isTransparent.value = settings.isTransparent ?? true
+        showBorder.value = settings.showBorder ?? false
         isSettingsOpen.value = false // 设置窗口总是关闭状态启动
-        if (state.windowConfig) {
-          windowConfig.value = { ...windowConfig.value, ...state.windowConfig }
+        if (settings.windowConfig) {
+          windowConfig.value = { ...windowConfig.value, ...settings.windowConfig }
         }
-        if (state.windowPosition) {
-          windowPosition.value = { ...state.windowPosition }
-        }
-        if (state.locale) {
-          locale.value = state.locale
+        if (settings.locale) {
+          locale.value = settings.locale
         }
       }
     }
     catch (error) {
-      console.error('Failed to load app state:', error)
+      console.error('Failed to load app settings:', error)
     }
   }
 
@@ -122,7 +114,7 @@ export const useAppStore = defineStore('app', () => {
   }
 
   // 监听需要持久化的状态变化
-  watch([isTransparent, windowConfig, windowPosition, locale], debouncedSave, { deep: true })
+  watch([isTransparent, windowConfig, locale], debouncedSave, { deep: true })
 
   return {
     // 状态

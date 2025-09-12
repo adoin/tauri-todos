@@ -11,6 +11,22 @@ const todoStore = useTodoStore()
 // 数据库配置模态框状态
 const isDatabaseConfigOpen = ref(false)
 
+const predefineColors = [
+  '#ff4500',
+  '#ff8c00',
+  '#ffd700',
+  '#90ee90',
+  '#00ced1',
+  '#1e90ff',
+  '#c71585',
+  'rgba(255, 69, 0, 0.68)',
+  'rgb(255, 120, 0)',
+  'hsv(51, 100, 98)',
+  'hsva(120, 40, 94, 0.5)',
+  'hsl(181, 100%, 37%)',
+  'hsla(209, 100%, 56%, 0.73)',
+  '#c7158577',
+]
 function closeSettings() {
   appStore.closeSettings()
 }
@@ -95,7 +111,7 @@ function onSyncCompleted(result: any) {
     <div
       class="max-h-96 overflow-y-auto pr-2 scrollbar-thin scrollbar-thumb-gray-300 scrollbar-track-gray-100 hover:scrollbar-thumb-gray-400"
     >
-      <ElForm label-width="120px" label-position="left">
+      <ElForm label-width="160px" label-position="left">
         <!-- 外观设置 -->
         <div class="mb-6">
           <h3 class="text-lg font-semibold mb-4 pb-2 border-b border-gray-200">
@@ -177,6 +193,8 @@ function onSyncCompleted(result: any) {
 
           <ElFormItem label="正常状态">
             <ElColorPicker
+              show-alpha
+              :predefine="predefineColors"
               :model-value="todoStore.settings.colors.normal"
               @change="(color: string | null) => updateTodoColor('normal', color)"
             />
@@ -184,6 +202,8 @@ function onSyncCompleted(result: any) {
 
           <ElFormItem label="警告状态（24小时内）">
             <ElColorPicker
+              show-alpha
+              :predefine="predefineColors"
               :model-value="todoStore.settings.colors.warning"
               @change="(color: string | null) => updateTodoColor('warning', color)"
             />
@@ -191,6 +211,8 @@ function onSyncCompleted(result: any) {
 
           <ElFormItem label="紧急状态（1小时内）">
             <ElColorPicker
+              show-alpha
+              :predefine="predefineColors"
               :model-value="todoStore.settings.colors.urgent"
               @change="(color: string | null) => updateTodoColor('urgent', color)"
             />
@@ -198,6 +220,8 @@ function onSyncCompleted(result: any) {
 
           <ElFormItem label="已完成">
             <ElColorPicker
+              show-alpha
+              :predefine="predefineColors"
               :model-value="todoStore.settings.colors.completed"
               @change="(color: string | null) => updateTodoColor('completed', color)"
             />
@@ -205,6 +229,8 @@ function onSyncCompleted(result: any) {
 
           <ElFormItem label="背景颜色">
             <ElColorPicker
+              show-alpha
+              :predefine="predefineColors"
               :model-value="todoStore.settings.colors.background"
               @change="(color: string | null) => updateTodoColor('background', color)"
             />
@@ -212,13 +238,18 @@ function onSyncCompleted(result: any) {
 
           <ElFormItem label="边框颜色">
             <ElColorPicker
+              show-alpha
+              :predefine="predefineColors"
               :model-value="todoStore.settings.colors.border"
               @change="(color: string | null) => updateTodoColor('border', color)"
             />
           </ElFormItem>
 
           <ElFormItem label="窗口边框颜色">
-            <ElColorPicker v-model="appStore.windowConfig.borderColor" @change="updateBorderColor" />
+            <ElColorPicker
+              v-model="appStore.windowConfig.borderColor" show-alpha
+              :predefine="predefineColors" @change="updateBorderColor"
+            />
           </ElFormItem>
 
           <ElFormItem label="重置颜色">

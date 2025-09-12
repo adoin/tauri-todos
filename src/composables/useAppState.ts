@@ -1,5 +1,5 @@
-import { ref, watch, computed } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
+import { computed, ref, watch } from 'vue'
 
 // 应用状态接口
 interface AppState {
@@ -23,7 +23,7 @@ interface AppState {
 
 // 默认状态
 const defaultState: AppState = {
-  isTransparent: true,
+  isTransparent: false,
   showBorder: false,
   isSettingsOpen: false,
   activeToolbar: false,
@@ -61,8 +61,9 @@ const windowStyle = computed(() => ({
 
 // 防抖保存
 let saveTimeout: ReturnType<typeof setTimeout> | null = null
-const debouncedSave = () => {
-  if (saveTimeout) clearTimeout(saveTimeout)
+function debouncedSave() {
+  if (saveTimeout)
+    clearTimeout(saveTimeout)
   saveTimeout = setTimeout(async () => {
     await saveState()
     saveTimeout = null
@@ -70,7 +71,7 @@ const debouncedSave = () => {
 }
 
 // 保存状态到 JSON 文件
-const saveState = async () => {
+async function saveState() {
   try {
     const state: AppState = {
       isTransparent: isTransparent.value,
@@ -82,13 +83,14 @@ const saveState = async () => {
     }
     await invoke('save_app_state', { state })
     console.log('App state saved successfully')
-  } catch (error) {
+  }
+  catch (error) {
     console.error('Failed to save app state:', error)
   }
 }
 
 // 从 JSON 文件加载状态
-const loadState = async () => {
+async function loadState() {
   try {
     const state = await invoke('load_app_state') as AppState
     if (state) {
@@ -96,18 +98,19 @@ const loadState = async () => {
       showBorder.value = state.showBorder ?? defaultState.showBorder
       isSettingsOpen.value = false // 设置窗口总是关闭状态启动
       activeToolbar.value = state.activeToolbar ?? defaultState.activeToolbar
-      
+
       if (state.windowConfig) {
         windowConfig.value = { ...defaultState.windowConfig, ...state.windowConfig }
       }
-      
+
       if (state.windowPosition) {
         windowPosition.value = { ...state.windowPosition }
       }
-      
+
       console.log('App state loaded successfully')
     }
-  } catch (error) {
+  }
+  catch (error) {
     console.error('Failed to load app state:', error)
   }
 }
@@ -150,7 +153,7 @@ export function useAppState() {
       windowConfig.value = { ...windowConfig.value, ...config }
     },
 
-    updateWindowPosition: (position: { x: number; y: number }) => {
+    updateWindowPosition: (position: { x: number, y: number }) => {
       windowPosition.value = { ...position }
     },
 
