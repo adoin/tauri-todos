@@ -59,7 +59,12 @@ pub fn run() {
             test_database_connection,
             connect_database,
             check_and_initialize_tables,
-            start_database_sync
+            start_database_sync,
+            // 逻辑删除命令
+            delete_todo_logically,
+            restore_todo,
+            restore_todo_safe,
+            get_deleted_todos
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

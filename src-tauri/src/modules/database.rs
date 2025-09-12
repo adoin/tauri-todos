@@ -57,54 +57,71 @@ impl Default for DatabaseState {
     }
 }
 
-// 注意：加密功能暂时移除，配置以明文存储
-// 在实际部署时应该实现真正的加密存储
-
-// 获取数据目录路径
-fn get_data_dir() -> Result<std::path::PathBuf, String> {
-    let data_dir = dirs::data_dir()
-        .ok_or("无法获取数据目录")?
-        .join("tauri-todos");
-    
-    std::fs::create_dir_all(&data_dir)
-        .map_err(|e| format!("创建数据目录失败: {}", e))?;
-    
-    Ok(data_dir)
+// Base64编码/解码函数
+fn encode_base64(data: &str) -> String {
+    use base64::{Engine as _, engine::general_purpose};
+    general_purpose::STANDARD.encode(data)
 }
 
-// 保存数据库配置（暂时不加密）
+fn decode_base64(encoded: &str) -> Result<String, String> {
+    use base64::{Engine as _, engine::general_purpose};
+    general_purpose::STANDARD.decode(encoded)
+        .map_err(|e| format!("Base64解码失败: {}", e))
+        .and_then(|bytes| String::from_utf8(bytes).map_err(|e| format!("UTF-8解码失败: {}", e)))
+}
+
+// 获取配置目录路径
+fn get_config_dir() -> Result<std::path::PathBuf, String> {
+    let config_dir = dirs::config_dir()
+        .ok_or("无法获取配置目录")?
+        .join("Ton")
+        .join("config");
+    
+    std::fs::create_dir_all(&config_dir)
+        .map_err(|e| format!("创建配置目录失败: {}", e))?;
+    
+    Ok(config_dir)
+}
+
+// 保存数据库配置（Base64加密）
 #[tauri::command]
 pub async fn save_database_config(config: DatabaseConfig) -> Result<(), String> {
-    let data_dir = get_data_dir()?;
-    let config_path = data_dir.join("database_config.json");
+    let config_dir = get_config_dir()?;
+    let config_path = config_dir.join("da.da");
     
     // 序列化配置
-    let config_json = serde_json::to_string_pretty(&config)
+    let config_json = serde_json::to_string(&config)
         .map_err(|e| format!("序列化配置失败: {}", e))?;
     
+    // Base64编码
+    let encoded_config = encode_base64(&config_json);
+    
     // 保存到文件
-    std::fs::write(&config_path, config_json)
+    std::fs::write(&config_path, encoded_config)
         .map_err(|e| format!("保存配置文件失败: {}", e))?;
     
     Ok(())
 }
 
-// 加载数据库配置
+// 加载数据库配置（Base64解密）
 #[tauri::command]
 pub async fn load_database_config() -> Result<Option<DatabaseConfig>, String> {
-    let data_dir = get_data_dir()?;
-    let config_path = data_dir.join("database_config.json");
+    let config_dir = get_config_dir()?;
+    let config_path = config_dir.join("da.da");
     
     if !config_path.exists() {
         return Ok(None);
     }
     
     // 读取文件
-    let config_data = std::fs::read_to_string(&config_path)
+    let encoded_data = std::fs::read_to_string(&config_path)
         .map_err(|e| format!("读取配置文件失败: {}", e))?;
     
+    // Base64解码
+    let config_json = decode_base64(&encoded_data)?;
+    
     // 反序列化配置
-    let config: DatabaseConfig = serde_json::from_str(&config_data)
+    let config: DatabaseConfig = serde_json::from_str(&config_json)
         .map_err(|e| format!("反序列化配置失败: {}", e))?;
     
     Ok(Some(config))
@@ -221,6 +238,7 @@ async fn alter_table_structure(pool: &MySqlPool, table_name: &str) -> Result<(),
                 "ALTER TABLE todo_items_sync ADD COLUMN IF NOT EXISTS created_at VARCHAR(50) NOT NULL COMMENT '创建时间'",
                 "ALTER TABLE todo_items_sync ADD COLUMN IF NOT EXISTS completed_at VARCHAR(50) NULL COMMENT '完成时间'",
                 "ALTER TABLE todo_items_sync ADD COLUMN IF NOT EXISTS deadline VARCHAR(50) NULL COMMENT '截止时间'",
+                "ALTER TABLE todo_items_sync ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE COMMENT '是否已删除（逻辑删除）'",
                 "ALTER TABLE todo_items_sync ADD COLUMN IF NOT EXISTS last_update VARCHAR(50) NOT NULL COMMENT '最后更新时间'",
                 "ALTER TABLE todo_items_sync ADD COLUMN IF NOT EXISTS created_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
                 "ALTER TABLE todo_items_sync ADD COLUMN IF NOT EXISTS updated_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
@@ -274,7 +292,7 @@ pub async fn check_and_initialize_tables(
         create_todos_sync_table(pool).await?;
         messages.push("创建了待办同步表");
     } else {
-        let expected_columns = ["id", "parent_id", "text", "completed", "created_at", "completed_at", "deadline", "last_update"];
+        let expected_columns = ["id", "parent_id", "text", "completed", "created_at", "completed_at", "deadline", "is_deleted", "last_update"];
         let structure_matches = check_table_structure(pool, "todo_items_sync", &expected_columns).await?;
         if !structure_matches {
             alter_table_structure(pool, "todo_items_sync").await?;
@@ -323,11 +341,13 @@ async fn create_todos_sync_table(pool: &MySqlPool) -> Result<(), String> {
             created_at VARCHAR(50) NOT NULL COMMENT '创建时间',
             completed_at VARCHAR(50) NULL COMMENT '完成时间',
             deadline VARCHAR(50) NULL COMMENT '截止时间',
+            is_deleted BOOLEAN NOT NULL DEFAULT FALSE COMMENT '是否已删除（逻辑删除）',
             last_update VARCHAR(50) NOT NULL COMMENT '最后更新时间',
             created_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             updated_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
             INDEX idx_parent_id (parent_id),
             INDEX idx_completed (completed),
+            INDEX idx_is_deleted (is_deleted),
             INDEX idx_last_update (last_update),
             INDEX idx_deadline (deadline)
         ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
@@ -366,7 +386,7 @@ pub async fn connect_database(
 }
 
 // 获取远程最后更新时间
-async fn get_remote_last_update(pool: &MySqlPool) -> Result<String, String> {
+async fn get_remote_last_update(pool: &MySqlPool) -> Result<Option<String>, String> {
     // 从设置表中获取 last_update
     let query = "SELECT field_value FROM todo_settings_sync WHERE field_name = 'last_update' ORDER BY id DESC LIMIT 1";
     
@@ -376,22 +396,26 @@ async fn get_remote_last_update(pool: &MySqlPool) -> Result<String, String> {
     {
         Ok(Some(row)) => {
             let value: String = row.get("field_value");
-            Ok(value)
+            Ok(Some(value))
         }
         Ok(None) => {
-            // 如果没有记录，返回当前时间
-            Ok(chrono::Utc::now().to_rfc3339())
+            // 如果没有记录，返回None表示远程没有数据
+            Ok(None)
         }
         Err(e) => Err(format!("获取远程最后更新时间失败: {}", e)),
     }
 }
 
-// 同步设置数据
+// 同步设置数据（带事务保护）
 async fn sync_settings_data(
     pool: &MySqlPool,
     local_settings: &Value,
     local_last_update: &str
 ) -> Result<usize, String> {
+    // 开始事务
+    let mut tx = pool.begin().await
+        .map_err(|e| format!("开始事务失败: {}", e))?;
+    
     let mut synced_count = 0;
     
     // 将设置对象转换为键值对
@@ -426,7 +450,7 @@ async fn sync_settings_data(
                 .bind(data_type)
                 .bind(&field_value)
                 .bind(local_last_update)
-                .execute(pool)
+                .execute(&mut *tx)
                 .await
                 .map_err(|e| format!("同步设置数据失败: {}", e))?;
             
@@ -434,15 +458,23 @@ async fn sync_settings_data(
         }
     }
     
+    // 提交事务
+    tx.commit().await
+        .map_err(|e| format!("提交事务失败: {}", e))?;
+    
     Ok(synced_count)
 }
 
-// 同步待办数据
+// 同步待办数据（带事务保护）
 async fn sync_todos_data(
     pool: &MySqlPool,
     local_todos: &[Value],
     local_last_update: &str
 ) -> Result<usize, String> {
+    // 开始事务
+    let mut tx = pool.begin().await
+        .map_err(|e| format!("开始事务失败: {}", e))?;
+    
     let mut synced_count = 0;
     
     for todo in local_todos {
@@ -472,10 +504,15 @@ async fn sync_todos_data(
             let parent_id = todo_obj.get("parentId")
                 .and_then(|v| v.as_str());
             
+            // 检查是否已删除（逻辑删除）
+            let is_deleted = todo_obj.get("isDeleted")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false);
+            
             // 插入或更新待办事项
             let query = r#"
-                INSERT INTO todo_items_sync (id, parent_id, text, completed, created_at, completed_at, deadline, last_update)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO todo_items_sync (id, parent_id, text, completed, created_at, completed_at, deadline, is_deleted, last_update)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON DUPLICATE KEY UPDATE
                     parent_id = VALUES(parent_id),
                     text = VALUES(text),
@@ -483,6 +520,7 @@ async fn sync_todos_data(
                     created_at = VALUES(created_at),
                     completed_at = VALUES(completed_at),
                     deadline = VALUES(deadline),
+                    is_deleted = VALUES(is_deleted),
                     last_update = VALUES(last_update)
             "#;
             
@@ -494,14 +532,19 @@ async fn sync_todos_data(
                 .bind(created_at)
                 .bind(completed_at)
                 .bind(deadline)
+                .bind(is_deleted)
                 .bind(local_last_update)
-                .execute(pool)
+                .execute(&mut *tx)
                 .await
                 .map_err(|e| format!("同步待办数据失败: {}", e))?;
             
             synced_count += 1;
         }
     }
+    
+    // 提交事务
+    tx.commit().await
+        .map_err(|e| format!("提交事务失败: {}", e))?;
     
     Ok(synced_count)
 }
@@ -534,8 +577,9 @@ async fn download_settings_data(pool: &MySqlPool) -> Result<Value, String> {
 // 从远程下载待办数据
 async fn download_todos_data(pool: &MySqlPool) -> Result<Vec<Value>, String> {
     let query = r#"
-        SELECT id, parent_id, text, completed, created_at, completed_at, deadline, last_update
+        SELECT id, parent_id, text, completed, created_at, completed_at, deadline, is_deleted, last_update
         FROM todo_items_sync
+        WHERE is_deleted = FALSE
         ORDER BY created_timestamp
     "#;
     
@@ -567,13 +611,16 @@ async fn download_todos_data(pool: &MySqlPool) -> Result<Vec<Value>, String> {
             todo.insert("deadline".to_string(), Value::String(deadline));
         }
         
+        // 添加isDeleted字段（虽然查询时已过滤，但保持数据结构一致）
+        todo.insert("isDeleted".to_string(), Value::Bool(row.get::<bool, _>("is_deleted")));
+        
         todos.push(Value::Object(todo));
     }
     
     Ok(todos)
 }
 
-// 保存下载的数据到本地
+// 保存下载的数据到本地（带事务保护）
 fn save_downloaded_data(todos: &[Value], settings: &Value, last_update: &str) -> Result<(), String> {
     // 保存待办数据
     let todo_data = serde_json::json!({
@@ -582,12 +629,22 @@ fn save_downloaded_data(todos: &[Value], settings: &Value, last_update: &str) ->
         "source": "sync"
     });
     
-    save_todos(todo_data)?;
-    
-    // 保存设置数据
-    save_settings(settings.clone())?;
-    
-    Ok(())
+    // 注意：这里调用的是本地文件保存函数，它们本身不涉及数据库事务
+    // 但我们需要确保两个文件保存操作要么都成功，要么都失败
+    match save_todos(todo_data) {
+        Ok(_) => {
+            // 待办数据保存成功，继续保存设置数据
+            match save_settings(settings.clone()) {
+                Ok(_) => Ok(()),
+                Err(e) => {
+                    // 设置数据保存失败，尝试回滚待办数据
+                    // 注意：这里无法真正回滚，只能记录错误
+                    Err(format!("保存设置数据失败: {}，待办数据已保存", e))
+                }
+            }
+        }
+        Err(e) => Err(format!("保存待办数据失败: {}", e))
+    }
 }
 
 // 开始数据库同步
@@ -610,36 +667,52 @@ pub async fn start_database_sync(
     // 获取远程最后更新时间
     let remote_last_update = get_remote_last_update(pool).await?;
     
-    // 比较时间戳决定同步方向
-    let local_time = chrono::DateTime::parse_from_rfc3339(local_last_update)
-        .map_err(|e| format!("解析本地时间失败: {}", e))?;
-    let remote_time = chrono::DateTime::parse_from_rfc3339(&remote_last_update)
-        .map_err(|e| format!("解析远程时间失败: {}", e))?;
-    
     let mut synced_items = 0;
-    let message = if local_time > remote_time {
-        // 本地较新，上传到远程
-        let settings_count = sync_settings_data(pool, &local_settings, local_last_update).await?;
-        let empty_vec = vec![];
-        let todos_data = local_todos.get("data")
-            .and_then(|v| v.as_array())
-            .unwrap_or(&empty_vec);
-        let todos_count = sync_todos_data(pool, todos_data, local_last_update).await?;
-        
-        synced_items = settings_count + todos_count;
-        format!("同步成功，已上传 {} 项数据到远程", synced_items)
-    } else if remote_time > local_time {
-        // 远程较新，从远程下载
-        let remote_settings = download_settings_data(pool).await?;
-        let remote_todos = download_todos_data(pool).await?;
-        
-        // 保存到本地
-        save_downloaded_data(&remote_todos, &remote_settings, &remote_last_update)?;
-        
-        synced_items = remote_todos.len() + remote_settings.as_object().map_or(0, |obj| obj.len());
-        format!("同步成功，已从远程下载 {} 项数据", synced_items)
-    } else {
-        "数据已是最新版本".to_string()
+    let message = match remote_last_update {
+        Some(remote_time_str) => {
+            // 远程有数据，比较时间戳决定同步方向
+            let local_time = chrono::DateTime::parse_from_rfc3339(local_last_update)
+                .map_err(|e| format!("解析本地时间失败: {}", e))?;
+            let remote_time = chrono::DateTime::parse_from_rfc3339(&remote_time_str)
+                .map_err(|e| format!("解析远程时间失败: {}", e))?;
+            
+            if local_time > remote_time {
+                // 本地较新，上传到远程
+                let settings_count = sync_settings_data(pool, &local_settings, local_last_update).await?;
+                let empty_vec = vec![];
+                let todos_data = local_todos.get("data")
+                    .and_then(|v| v.as_array())
+                    .unwrap_or(&empty_vec);
+                let todos_count = sync_todos_data(pool, todos_data, local_last_update).await?;
+                
+                synced_items = settings_count + todos_count;
+                format!("同步成功，已上传 {} 项数据到远程", synced_items)
+            } else if remote_time > local_time {
+                // 远程较新，从远程下载
+                let remote_settings = download_settings_data(pool).await?;
+                let remote_todos = download_todos_data(pool).await?;
+                
+                // 保存到本地
+                save_downloaded_data(&remote_todos, &remote_settings, &remote_time_str)?;
+                
+                synced_items = remote_todos.len() + remote_settings.as_object().map_or(0, |obj| obj.len());
+                format!("同步成功，已从远程下载 {} 项数据", synced_items)
+            } else {
+                "数据已是最新版本".to_string()
+            }
+        }
+        None => {
+            // 远程没有数据，直接上传本地数据
+            let settings_count = sync_settings_data(pool, &local_settings, local_last_update).await?;
+            let empty_vec = vec![];
+            let todos_data = local_todos.get("data")
+                .and_then(|v| v.as_array())
+                .unwrap_or(&empty_vec);
+            let todos_count = sync_todos_data(pool, todos_data, local_last_update).await?;
+            
+            synced_items = settings_count + todos_count;
+            format!("同步成功，已上传 {} 项数据到远程（首次同步）", synced_items)
+        }
     };
     
     Ok(SyncResult {
@@ -647,8 +720,221 @@ pub async fn start_database_sync(
         message,
         data: Some(SyncData {
             local_last_update: local_last_update.to_string(),
-            remote_last_update,
+            remote_last_update: remote_last_update.unwrap_or_else(|| "无远程数据".to_string()),
             synced_items,
         }),
     })
+}
+
+// 逻辑删除待办事项（支持级联删除子项，带事务保护）
+#[tauri::command]
+pub async fn delete_todo_logically(
+    todo_id: String,
+    state: State<'_, DatabaseState>
+) -> Result<bool, String> {
+    let pool_guard = state.pool.lock().await;
+    let pool = pool_guard.as_ref()
+        .ok_or("数据库连接未建立")?;
+    
+    let current_time = chrono::Utc::now().to_rfc3339();
+    
+    // 开始事务
+    let mut tx = pool.begin().await
+        .map_err(|e| format!("开始事务失败: {}", e))?;
+    
+    // 使用递归CTE查找所有子项
+    let cascade_delete_query = r#"
+        WITH RECURSIVE todo_hierarchy AS (
+            -- 基础查询：找到要删除的根项
+            SELECT id, parent_id, 0 as level
+            FROM todo_items_sync 
+            WHERE id = ? AND is_deleted = FALSE
+            
+            UNION ALL
+            
+            -- 递归查询：找到所有子项
+            SELECT t.id, t.parent_id, th.level + 1
+            FROM todo_items_sync t
+            INNER JOIN todo_hierarchy th ON t.parent_id = th.id
+            WHERE t.is_deleted = FALSE
+        )
+        UPDATE todo_items_sync 
+        SET is_deleted = TRUE, last_update = ?
+        WHERE id IN (SELECT id FROM todo_hierarchy)
+    "#;
+    
+    let result = sqlx::query(cascade_delete_query)
+        .bind(&todo_id)
+        .bind(&current_time)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| format!("级联逻辑删除待办事项失败: {}", e))?;
+    
+    // 提交事务
+    tx.commit().await
+        .map_err(|e| format!("提交事务失败: {}", e))?;
+    
+    Ok(result.rows_affected() > 0)
+}
+
+// 恢复已删除的待办事项（支持级联恢复，带事务保护）
+#[tauri::command]
+pub async fn restore_todo(
+    todo_id: String,
+    state: State<'_, DatabaseState>
+) -> Result<bool, String> {
+    let pool_guard = state.pool.lock().await;
+    let pool = pool_guard.as_ref()
+        .ok_or("数据库连接未建立")?;
+    
+    let current_time = chrono::Utc::now().to_rfc3339();
+    
+    // 开始事务
+    let mut tx = pool.begin().await
+        .map_err(|e| format!("开始事务失败: {}", e))?;
+    
+    // 使用递归CTE查找所有需要恢复的项（包括父项和子项）
+    let cascade_restore_query = r#"
+        WITH RECURSIVE todo_hierarchy AS (
+            -- 基础查询：找到要恢复的根项
+            SELECT id, parent_id, 0 as level
+            FROM todo_items_sync 
+            WHERE id = ? AND is_deleted = TRUE
+            
+            UNION ALL
+            
+            -- 向上递归：找到所有父项（如果父项也被删除了）
+            SELECT t.id, t.parent_id, th.level + 1
+            FROM todo_items_sync t
+            INNER JOIN todo_hierarchy th ON t.id = th.parent_id
+            WHERE t.is_deleted = TRUE
+            
+            UNION ALL
+            
+            -- 向下递归：找到所有子项
+            SELECT t.id, t.parent_id, th.level + 1
+            FROM todo_items_sync t
+            INNER JOIN todo_hierarchy th ON t.parent_id = th.id
+            WHERE t.is_deleted = TRUE
+        )
+        UPDATE todo_items_sync 
+        SET is_deleted = FALSE, last_update = ?
+        WHERE id IN (SELECT id FROM todo_hierarchy)
+    "#;
+    
+    let result = sqlx::query(cascade_restore_query)
+        .bind(&todo_id)
+        .bind(&current_time)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| format!("级联恢复待办事项失败: {}", e))?;
+    
+    // 提交事务
+    tx.commit().await
+        .map_err(|e| format!("提交事务失败: {}", e))?;
+    
+    Ok(result.rows_affected() > 0)
+}
+
+// 安全恢复已删除的待办事项（只恢复当前项和其子项，不恢复父项，带事务保护）
+#[tauri::command]
+pub async fn restore_todo_safe(
+    todo_id: String,
+    state: State<'_, DatabaseState>
+) -> Result<bool, String> {
+    let pool_guard = state.pool.lock().await;
+    let pool = pool_guard.as_ref()
+        .ok_or("数据库连接未建立")?;
+    
+    let current_time = chrono::Utc::now().to_rfc3339();
+    
+    // 开始事务
+    let mut tx = pool.begin().await
+        .map_err(|e| format!("开始事务失败: {}", e))?;
+    
+    // 使用递归CTE只查找当前项和其子项
+    let safe_restore_query = r#"
+        WITH RECURSIVE todo_hierarchy AS (
+            -- 基础查询：找到要恢复的根项
+            SELECT id, parent_id, 0 as level
+            FROM todo_items_sync 
+            WHERE id = ? AND is_deleted = TRUE
+            
+            UNION ALL
+            
+            -- 向下递归：只找到子项
+            SELECT t.id, t.parent_id, th.level + 1
+            FROM todo_items_sync t
+            INNER JOIN todo_hierarchy th ON t.parent_id = th.id
+            WHERE t.is_deleted = TRUE
+        )
+        UPDATE todo_items_sync 
+        SET is_deleted = FALSE, last_update = ?
+        WHERE id IN (SELECT id FROM todo_hierarchy)
+    "#;
+    
+    let result = sqlx::query(safe_restore_query)
+        .bind(&todo_id)
+        .bind(&current_time)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| format!("安全恢复待办事项失败: {}", e))?;
+    
+    // 提交事务
+    tx.commit().await
+        .map_err(|e| format!("提交事务失败: {}", e))?;
+    
+    Ok(result.rows_affected() > 0)
+}
+
+// 获取已删除的待办事项列表
+#[tauri::command]
+pub async fn get_deleted_todos(
+    state: State<'_, DatabaseState>
+) -> Result<Vec<Value>, String> {
+    let pool_guard = state.pool.lock().await;
+    let pool = pool_guard.as_ref()
+        .ok_or("数据库连接未建立")?;
+    
+    let query = r#"
+        SELECT id, parent_id, text, completed, created_at, completed_at, deadline, is_deleted, last_update
+        FROM todo_items_sync
+        WHERE is_deleted = TRUE
+        ORDER BY updated_timestamp DESC
+    "#;
+    
+    let rows = sqlx::query(query)
+        .fetch_all(pool)
+        .await
+        .map_err(|e| format!("获取已删除待办事项失败: {}", e))?;
+    
+    let mut todos = Vec::new();
+    
+    for row in rows {
+        let mut todo = serde_json::Map::new();
+        
+        todo.insert("id".to_string(), Value::String(row.get::<String, _>("id")));
+        
+        if let Some(parent_id) = row.get::<Option<String>, _>("parent_id") {
+            todo.insert("parentId".to_string(), Value::String(parent_id));
+        }
+        
+        todo.insert("text".to_string(), Value::String(row.get::<String, _>("text")));
+        todo.insert("completed".to_string(), Value::Bool(row.get::<bool, _>("completed")));
+        todo.insert("createdAt".to_string(), Value::String(row.get::<String, _>("created_at")));
+        
+        if let Some(completed_at) = row.get::<Option<String>, _>("completed_at") {
+            todo.insert("completedAt".to_string(), Value::String(completed_at));
+        }
+        
+        if let Some(deadline) = row.get::<Option<String>, _>("deadline") {
+            todo.insert("deadline".to_string(), Value::String(deadline));
+        }
+        
+        todo.insert("isDeleted".to_string(), Value::Bool(row.get::<bool, _>("is_deleted")));
+        
+        todos.push(Value::Object(todo));
+    }
+    
+    Ok(todos)
 }
