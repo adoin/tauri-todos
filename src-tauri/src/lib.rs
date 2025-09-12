@@ -33,6 +33,9 @@ pub fn run() {
             // 设置系统托盘
             modules::tray::setup_tray(app)?;
 
+            // 窗口初始为隐藏状态，等待前端配置完成后显示
+            // 前端会通过 show_main_window 命令来显示窗口
+
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![

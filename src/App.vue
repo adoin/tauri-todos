@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import type { LocaleKey } from './constants/locale'
+import { invoke } from '@tauri-apps/api/core'
 import { ElConfigProvider } from 'element-plus'
 import { computed, onMounted, watch } from 'vue'
 import FloatingWindow from './components/FloatingWindow.vue'
@@ -40,10 +41,24 @@ function applyCssVariablesToHtml() {
   })
 }
 
-// 组件挂载时应用CSS变量
-onMounted(() => {
+// 组件挂载时应用CSS变量并初始化应用
+onMounted(async () => {
   applyCssVariablesToHtml()
+  // 初始化应用设置
+  await appStore.loadAppSettings()
+  // 配置加载完成后显示窗口
+  await showMainWindow()
 })
+
+// 显示主窗口
+async function showMainWindow() {
+  try {
+    await invoke('show_main_window')
+  }
+  catch (error) {
+    console.error('Failed to show main window:', error)
+  }
+}
 
 // 监听CSS变量变化，实时更新到html元素
 watch(() => cssVariables.value, () => {
