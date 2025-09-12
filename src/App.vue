@@ -27,8 +27,6 @@ function rgb2rgba(rgb: string, opacity: number) {
 // 计算 CSS 变量
 const cssVariables = computed(() => ({
   // 窗口配置
-  '--window-width': `${appStore.windowConfig.width}px`,
-  '--window-height': `${appStore.windowConfig.height}px`,
   '--window-opacity': appStore.isTransparent ? appStore.windowConfig.opacity : 1,
   '--window-border-radius': `${appStore.windowConfig.borderRadius}px`,
   '--window-border-width': `${appStore.windowConfig.borderWidth}px`,
@@ -69,7 +67,7 @@ html, body {
 }
 
 #app {
-  width: 100vw;
+  width: 100%;
   height: 100vh;
   background: transparent;
   border-radius: 8px;
