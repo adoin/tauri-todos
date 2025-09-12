@@ -5,6 +5,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window'
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useAppStore } from '../store/app'
 import { useTodoStore } from '../store/todo'
+import SyncModal from './SyncModal.vue'
 import TodoList from './TodoList.vue'
 
 const appStore = useAppStore()
@@ -13,6 +14,7 @@ const isDragging = ref(false)
 // const dragOffset = ref({ x: 0, y: 0 })
 const windowElement = ref<HTMLElement>()
 const showToolbarItems = ref(false)
+const syncModalRef = ref<InstanceType<typeof SyncModal>>()
 function handleMouseEnter() {
   appStore.toggleBorder(true)
 }
@@ -70,7 +72,7 @@ function importData() {
   input.click()
 }
 function showSyncModal() {
-  // todo
+  syncModalRef.value?.open()
 }
 async function saveWindowConfig() {
   try {
@@ -231,6 +233,9 @@ onUnmounted(() => {
         <TodoList />
       </div>
     </div>
+
+    <!-- 同步模态框 -->
+    <SyncModal ref="syncModalRef" />
   </div>
 </template>
 

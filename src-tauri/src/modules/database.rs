@@ -210,14 +210,14 @@ async fn alter_table_structure(pool: &MySqlPool, table_name: &str) -> Result<(),
         "todo_settings_sync" => {
             // 检查并添加缺失的列
             let alter_queries = vec![
-                "ALTER TABLE todo_settings_sync ADD COLUMN IF NOT EXISTS id INT AUTO_INCREMENT PRIMARY KEY FIRST",
-                "ALTER TABLE todo_settings_sync ADD COLUMN IF NOT EXISTS update_time VARCHAR(50) NOT NULL COMMENT '更新时间'",
-                "ALTER TABLE todo_settings_sync ADD COLUMN IF NOT EXISTS field_name VARCHAR(100) NOT NULL COMMENT '字段名'",
-                "ALTER TABLE todo_settings_sync ADD COLUMN IF NOT EXISTS data_type VARCHAR(50) NOT NULL COMMENT '数据类型'",
-                "ALTER TABLE todo_settings_sync ADD COLUMN IF NOT EXISTS field_value TEXT NOT NULL COMMENT '字段值'",
-                "ALTER TABLE todo_settings_sync ADD COLUMN IF NOT EXISTS last_update VARCHAR(50) NOT NULL COMMENT '最后更新时间'",
-                "ALTER TABLE todo_settings_sync ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
-                "ALTER TABLE todo_settings_sync ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+                "ALTER TABLE todo_settings_sync ADD COLUMN id INT AUTO_INCREMENT PRIMARY KEY FIRST",
+                "ALTER TABLE todo_settings_sync ADD COLUMN update_time VARCHAR(50) NOT NULL COMMENT '更新时间'",
+                "ALTER TABLE todo_settings_sync ADD COLUMN field_name VARCHAR(100) NOT NULL COMMENT '字段名'",
+                "ALTER TABLE todo_settings_sync ADD COLUMN data_type VARCHAR(50) NOT NULL COMMENT '数据类型'",
+                "ALTER TABLE todo_settings_sync ADD COLUMN field_value TEXT NOT NULL COMMENT '字段值'",
+                "ALTER TABLE todo_settings_sync ADD COLUMN last_update VARCHAR(50) NOT NULL COMMENT '最后更新时间'",
+                "ALTER TABLE todo_settings_sync ADD COLUMN created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+                "ALTER TABLE todo_settings_sync ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
             ];
             
             for query in alter_queries {
@@ -228,20 +228,29 @@ async fn alter_table_structure(pool: &MySqlPool, table_name: &str) -> Result<(),
                     }
                 }
             }
+            
+            // 添加唯一约束（如果不存在）
+            let unique_constraint_query = "ALTER TABLE todo_settings_sync ADD UNIQUE KEY unique_field_name (field_name)";
+            if let Err(e) = sqlx::query(unique_constraint_query).execute(pool).await {
+                // 忽略约束已存在的错误
+                if !e.to_string().contains("Duplicate key name") && !e.to_string().contains("already exists") {
+                    return Err(format!("添加唯一约束失败: {}", e));
+                }
+            }
         }
         "todo_items_sync" => {
             let alter_queries = vec![
-                "ALTER TABLE todo_items_sync ADD COLUMN IF NOT EXISTS id VARCHAR(50) PRIMARY KEY COMMENT '待办事项ID'",
-                "ALTER TABLE todo_items_sync ADD COLUMN IF NOT EXISTS parent_id VARCHAR(50) NULL COMMENT '父项ID，支持树形结构'",
-                "ALTER TABLE todo_items_sync ADD COLUMN IF NOT EXISTS text TEXT NOT NULL COMMENT '待办事项内容'",
-                "ALTER TABLE todo_items_sync ADD COLUMN IF NOT EXISTS completed BOOLEAN NOT NULL DEFAULT FALSE COMMENT '是否完成'",
-                "ALTER TABLE todo_items_sync ADD COLUMN IF NOT EXISTS created_at VARCHAR(50) NOT NULL COMMENT '创建时间'",
-                "ALTER TABLE todo_items_sync ADD COLUMN IF NOT EXISTS completed_at VARCHAR(50) NULL COMMENT '完成时间'",
-                "ALTER TABLE todo_items_sync ADD COLUMN IF NOT EXISTS deadline VARCHAR(50) NULL COMMENT '截止时间'",
-                "ALTER TABLE todo_items_sync ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN NOT NULL DEFAULT FALSE COMMENT '是否已删除（逻辑删除）'",
-                "ALTER TABLE todo_items_sync ADD COLUMN IF NOT EXISTS last_update VARCHAR(50) NOT NULL COMMENT '最后更新时间'",
-                "ALTER TABLE todo_items_sync ADD COLUMN IF NOT EXISTS created_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
-                "ALTER TABLE todo_items_sync ADD COLUMN IF NOT EXISTS updated_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
+                "ALTER TABLE todo_items_sync ADD COLUMN id VARCHAR(50) PRIMARY KEY COMMENT '待办事项ID'",
+                "ALTER TABLE todo_items_sync ADD COLUMN parent_id VARCHAR(50) NULL COMMENT '父项ID，支持树形结构'",
+                "ALTER TABLE todo_items_sync ADD COLUMN text TEXT NOT NULL COMMENT '待办事项内容'",
+                "ALTER TABLE todo_items_sync ADD COLUMN completed BOOLEAN NOT NULL DEFAULT FALSE COMMENT '是否完成'",
+                "ALTER TABLE todo_items_sync ADD COLUMN created_at VARCHAR(50) NOT NULL COMMENT '创建时间'",
+                "ALTER TABLE todo_items_sync ADD COLUMN completed_at VARCHAR(50) NULL COMMENT '完成时间'",
+                "ALTER TABLE todo_items_sync ADD COLUMN deadline VARCHAR(50) NULL COMMENT '截止时间'",
+                "ALTER TABLE todo_items_sync ADD COLUMN is_deleted BOOLEAN NOT NULL DEFAULT FALSE COMMENT '是否已删除（逻辑删除）'",
+                "ALTER TABLE todo_items_sync ADD COLUMN last_update VARCHAR(50) NOT NULL COMMENT '最后更新时间'",
+                "ALTER TABLE todo_items_sync ADD COLUMN created_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+                "ALTER TABLE todo_items_sync ADD COLUMN updated_timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP",
             ];
             
             for query in alter_queries {
@@ -255,6 +264,24 @@ async fn alter_table_structure(pool: &MySqlPool, table_name: &str) -> Result<(),
         }
         _ => return Err(format!("未知的表名: {}", table_name)),
     }
+    
+    Ok(())
+}
+
+// 清理重复的设置数据
+async fn cleanup_duplicate_settings(pool: &MySqlPool) -> Result<(), String> {
+    // 删除重复的设置数据，只保留最新的
+    let cleanup_query = r#"
+        DELETE t1 FROM todo_settings_sync t1
+        INNER JOIN todo_settings_sync t2 
+        WHERE t1.id > t2.id 
+        AND t1.field_name = t2.field_name
+    "#;
+    
+    sqlx::query(cleanup_query)
+        .execute(pool)
+        .await
+        .map_err(|e| format!("清理重复设置数据失败: {}", e))?;
     
     Ok(())
 }
@@ -284,6 +311,10 @@ pub async fn check_and_initialize_tables(
         } else {
             messages.push("设置同步表结构正常");
         }
+        
+        // 清理重复的设置数据
+        cleanup_duplicate_settings(pool).await?;
+        messages.push("清理了重复的设置数据");
     }
     
     // 检查待办同步表
@@ -311,7 +342,7 @@ async fn create_settings_sync_table(pool: &MySqlPool) -> Result<(), String> {
         CREATE TABLE IF NOT EXISTS todo_settings_sync (
             id INT AUTO_INCREMENT PRIMARY KEY,
             update_time VARCHAR(50) NOT NULL COMMENT '更新时间',
-            field_name VARCHAR(100) NOT NULL COMMENT '字段名',
+            field_name VARCHAR(100) NOT NULL UNIQUE COMMENT '字段名',
             data_type VARCHAR(50) NOT NULL COMMENT '数据类型',
             field_value TEXT NOT NULL COMMENT '字段值',
             last_update VARCHAR(50) NOT NULL COMMENT '最后更新时间',
@@ -668,6 +699,7 @@ pub async fn start_database_sync(
     let remote_last_update = get_remote_last_update(pool).await?;
     
     let mut synced_items = 0;
+    let remote_last_update_str = remote_last_update.clone().unwrap_or_else(|| "无远程数据".to_string());
     let message = match remote_last_update {
         Some(remote_time_str) => {
             // 远程有数据，比较时间戳决定同步方向
@@ -720,7 +752,7 @@ pub async fn start_database_sync(
         message,
         data: Some(SyncData {
             local_last_update: local_last_update.to_string(),
-            remote_last_update: remote_last_update.unwrap_or_else(|| "无远程数据".to_string()),
+            remote_last_update: remote_last_update_str,
             synced_items,
         }),
     })

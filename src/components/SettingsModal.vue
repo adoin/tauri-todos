@@ -102,7 +102,10 @@ function openDatabaseConfig() {
 
 function onSyncCompleted(result: any) {
   console.log('同步完成:', result)
-  // 可以在这里添加同步完成后的处理逻辑
+  if (result.success) {
+    // 关闭同步配置的弹窗
+    isDatabaseConfigOpen.value = false
+  }
 }
 </script>
 
