@@ -39,7 +39,7 @@ pub fn load_app_settings() -> Result<Value, String> {
             "windowConfig": {
               "borderRadius": 8,
               "borderColor": "#3b82f6",
-              "borderWidth": 2,
+              "borderWidth": 1,
             },
             "colors": {
               "normal": "#4f2937",

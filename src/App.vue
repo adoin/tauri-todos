@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { LocaleKey } from './constants/locale'
 import { ElConfigProvider } from 'element-plus'
-import { computed } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import FloatingWindow from './components/FloatingWindow.vue'
 import SettingsModal from './components/SettingsModal.vue'
 import { locales } from './constants/locale'
@@ -14,6 +14,7 @@ const locale = computed(() => {
   const currentLocale = appStore.appSettings.locale as LocaleKey
   return locales[currentLocale] || locales['zh-cn']
 })
+
 // 计算 CSS 变量
 const cssVariables = computed(() => ({
   // 窗口配置
@@ -28,10 +29,30 @@ const cssVariables = computed(() => ({
   '--todo-completed-color': appStore.appSettings.colors.completed,
   '--todo-border-color': appStore.appSettings.colors.border,
 }))
+
+// 将CSS变量应用到html元素
+function applyCssVariablesToHtml() {
+  const htmlElement = document.documentElement
+  const variables = cssVariables.value
+
+  Object.entries(variables).forEach(([key, value]) => {
+    htmlElement.style.setProperty(key, value)
+  })
+}
+
+// 组件挂载时应用CSS变量
+onMounted(() => {
+  applyCssVariablesToHtml()
+})
+
+// 监听CSS变量变化，实时更新到html元素
+watch(() => cssVariables.value, () => {
+  applyCssVariablesToHtml()
+}, { deep: true, immediate: true })
 </script>
 
 <template>
-  <div id="app" :style="cssVariables">
+  <div id="app">
     <ElConfigProvider :locale="locale">
       <FloatingWindow />
       <SettingsModal />

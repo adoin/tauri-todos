@@ -13,19 +13,11 @@ const isDragging = ref(false)
 // const dragOffset = ref({ x: 0, y: 0 })
 const windowElement = ref<HTMLElement>()
 const showToolbarItems = ref(false)
-function handleMouseEnter() {
-  appStore.toggleBorder(true)
-}
-
-function handleMouseLeave() {
-  appStore.toggleBorder(false)
-}
 
 async function handleMouseDown(_event: MouseEvent) {
   // 只有在拖拽手柄上才处理拖拽，不阻止其他事件
   isDragging.value = true
   const window = getCurrentWindow()
-
   // 开始拖拽
   await window.startDragging()
 }
@@ -163,8 +155,6 @@ onUnmounted(() => {
   <div
     ref="windowElement"
     class="relative backdrop-blur-10px transition-all duration-200 ease-in-out overflow-hidden floating-window"
-    @mouseenter="handleMouseEnter"
-    @mouseleave="handleMouseLeave"
   >
     <!-- 悬浮窗口内容 -->
     <div class="w-full h-full flex flex-col">
