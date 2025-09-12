@@ -1,11 +1,10 @@
-import type { ArchivedTodoData, TodoData, TodoItem, TodoSettings } from '../types/todo'
+import type { ArchivedTodoData, TodoData, TodoItem } from '../types/todo'
 import { invoke } from '@tauri-apps/api/core'
 import { save } from '@tauri-apps/plugin-dialog'
 import { writeFile } from '@tauri-apps/plugin-fs'
 import { ElMessage } from 'element-plus'
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
-import { defaultTodoSettings } from '../constants/todo'
 import { $confirm } from '../utils/message'
 import { timeUtils } from '../utils/time'
 
@@ -16,7 +15,6 @@ export const useTodoStore = defineStore('todo', () => {
     lastUpdate: new Date().toISOString(),
     source: 'manual',
   })
-  const settings = ref<TodoSettings>({ ...defaultTodoSettings })
   const loading = ref(false)
   const error = ref<string | null>(null)
 
@@ -58,17 +56,6 @@ export const useTodoStore = defineStore('todo', () => {
     }
   }
 
-  // 保存设置到文件
-  const saveSettings = async () => {
-    try {
-      await invoke('save_settings', { settings: settings.value })
-    }
-    catch (err) {
-      console.error('Failed to save settings:', err)
-      throw err
-    }
-  }
-
   // 从文件加载待办事项
   const loadTodos = async () => {
     try {
@@ -103,19 +90,6 @@ export const useTodoStore = defineStore('todo', () => {
     }
     finally {
       loading.value = false
-    }
-  }
-
-  // 从文件加载设置
-  const loadSettings = async () => {
-    try {
-      const settingsData = await invoke('load_settings') as TodoSettings
-      settings.value = { ...defaultTodoSettings, ...settingsData }
-    }
-    catch (err) {
-      console.error('Failed to load settings:', err)
-      // 如果加载设置失败，使用默认设置
-      settings.value = { ...defaultTodoSettings }
     }
   }
 
@@ -291,18 +265,6 @@ export const useTodoStore = defineStore('todo', () => {
     }
   }
 
-  // 更新设置
-  const updateSettings = async (newSettings: Partial<TodoSettings>) => {
-    settings.value = { ...settings.value, ...newSettings }
-    await saveSettings()
-  }
-
-  // 重置颜色设置为默认值
-  const resetColorsToDefault = async () => {
-    settings.value = { ...settings.value, colors: { ...defaultTodoSettings.colors } }
-    await saveSettings()
-  }
-
   // 设置数据来源
   const setDataSource = (source: 'manual' | 'import' | 'sync') => {
     todos.value.source = source
@@ -310,11 +272,11 @@ export const useTodoStore = defineStore('todo', () => {
   }
 
   // 归档已完成的待办事项
-  const archiveCompletedTodos = async () => {
+  const archiveCompletedTodos = async (archiveDays: number = 7) => {
     const completedTodos = todos.value.data.filter((todo) => {
       return todo.completed
         && todo.completedAt
-        && timeUtils.shouldArchive(todo.completedAt, settings.value.archiveDays)
+        && timeUtils.shouldArchive(todo.completedAt, archiveDays)
     })
 
     if (completedTodos.length === 0)
@@ -358,34 +320,13 @@ export const useTodoStore = defineStore('todo', () => {
     }
   }
 
-  // 获取待办事项的时间状态
-  const getTodoTimeStatus = (todo: TodoItem): 'normal' | 'warning' | 'urgent' => {
-    if (!todo.deadline || todo.completed)
-      return 'normal'
-    return timeUtils.getTimeStatus(todo.deadline)
-  }
-
-  // 获取待办事项的样式颜色
-  const getTodoColor = (todo: TodoItem): string => {
-    if (todo.completed) {
-      return settings.value.colors.completed
-    }
-
-    const timeStatus = getTodoTimeStatus(todo)
-    switch (timeStatus) {
-      case 'urgent': return settings.value.colors.urgent
-      case 'warning': return settings.value.colors.warning
-      default: return settings.value.colors.normal
-    }
-  }
-
   // 监听数据变化并自动归档
   let archiveTimeout: ReturnType<typeof setTimeout> | null = null
-  const scheduleArchiveCheck = () => {
+  const scheduleArchiveCheck = (archiveDays: number = 7) => {
     if (archiveTimeout)
       clearTimeout(archiveTimeout)
     archiveTimeout = setTimeout(() => {
-      archiveCompletedTodos()
+      archiveCompletedTodos(archiveDays)
       archiveTimeout = null
     }, 5000) // 5秒后检查归档
   }
@@ -505,12 +446,11 @@ export const useTodoStore = defineStore('todo', () => {
   }
 
   // 监听待办事项变化
-  watch(todos, scheduleArchiveCheck, { deep: true })
+  watch(todos, () => scheduleArchiveCheck(7), { deep: true })
 
   return {
     // 状态
     todos,
-    settings,
     loading,
     error,
 
@@ -523,16 +463,10 @@ export const useTodoStore = defineStore('todo', () => {
     updateTodo,
     toggleTodo,
     deleteTodo,
-    updateSettings,
-    resetColorsToDefault,
     loadTodos,
-    loadSettings,
     saveTodos,
-    saveSettings,
     archiveCompletedTodos,
     clearArchivedTodos,
-    getTodoTimeStatus,
-    getTodoColor,
     exportTodos,
     importTodos,
     setDataSource,

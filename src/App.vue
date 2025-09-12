@@ -6,38 +6,27 @@ import FloatingWindow from './components/FloatingWindow.vue'
 import SettingsModal from './components/SettingsModal.vue'
 import { locales } from './constants/locale'
 import { useAppStore } from './store/app'
-import { useTodoStore } from './store/todo'
-import { hexToRGB } from './utils/color'
 
 const appStore = useAppStore()
-const todoStore = useTodoStore()
 
 // 计算当前语言配置
 const locale = computed(() => {
   const currentLocale = appStore.locale as LocaleKey
   return locales[currentLocale] || locales['zh-cn']
 })
-/* rgb() => rgba() */
-function rgb2rgba(rgb: string, opacity: number) {
-  if (rgb.startsWith('#')) {
-    rgb = hexToRGB(rgb)
-  }
-  return rgb.replace('RGB(', 'RGBA(').replace(')', `, ${opacity})`).toLowerCase()
-}
 // 计算 CSS 变量
 const cssVariables = computed(() => ({
   // 窗口配置
-  '--window-opacity': appStore.isTransparent ? appStore.windowConfig.opacity : 1,
   '--window-border-radius': `${appStore.windowConfig.borderRadius}px`,
   '--window-border-width': `${appStore.windowConfig.borderWidth}px`,
   '--window-border-color': appStore.windowConfig.borderColor,
-  '--window-background': appStore.isTransparent ? 'transparent' : rgb2rgba(todoStore.settings.colors.background, appStore.windowConfig.opacity),
+  '--window-background': appStore.isTransparent ? 'transparent' : appStore.appSettings.colors.background,
   // 待办事项颜色配置
-  '--todo-normal-color': todoStore.settings.colors.normal,
-  '--todo-warning-color': todoStore.settings.colors.warning,
-  '--todo-urgent-color': todoStore.settings.colors.urgent,
-  '--todo-completed-color': todoStore.settings.colors.completed,
-  '--todo-border-color': todoStore.settings.colors.border,
+  '--todo-normal-color': appStore.appSettings.colors.normal,
+  '--todo-warning-color': appStore.appSettings.colors.warning,
+  '--todo-urgent-color': appStore.appSettings.colors.urgent,
+  '--todo-completed-color': appStore.appSettings.colors.completed,
+  '--todo-border-color': appStore.appSettings.colors.border,
 }))
 </script>
 

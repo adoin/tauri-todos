@@ -1,8 +1,10 @@
 import type { LocaleKey } from '../constants/locale'
+import type { AppSettings } from '../types/app'
 import { invoke } from '@tauri-apps/api/core'
 import { defineStore } from 'pinia'
 import { computed, ref, watch } from 'vue'
 import { defaultLocale } from '../constants/locale'
+import { defaultAppSettings } from '../constants/todo'
 
 export const useAppStore = defineStore('app', () => {
   // 悬浮窗口状态
@@ -12,26 +14,21 @@ export const useAppStore = defineStore('app', () => {
 
   // 窗口配置（不包含宽高，宽高由Tauri窗口管理）
   const windowConfig = ref({
-    opacity: 0.8,
     borderRadius: 8,
     borderColor: '#3b82f6',
     borderWidth: 2,
   })
 
-  // 窗口位置
-  const windowPosition = ref({
-    x: 100,
-    y: 100,
-  })
-
   // 语言配置
   const locale = ref<LocaleKey>(defaultLocale)
+
+  // 待办事项设置
+  const appSettings = ref<AppSettings>({ ...defaultAppSettings })
 
   // 计算属性
   const windowStyle = computed(() => ({
     borderRadius: `${windowConfig.value.borderRadius}px`,
     border: showBorder.value ? `${windowConfig.value.borderWidth}px solid ${windowConfig.value.borderColor}` : 'none',
-    opacity: windowConfig.value.opacity,
     backgroundColor: isTransparent.value ? 'transparent' : 'rgba(255, 255, 255, 0.9)',
   }))
 
@@ -56,12 +53,41 @@ export const useAppStore = defineStore('app', () => {
     windowConfig.value = { ...windowConfig.value, ...config }
   }
 
-  const updateWindowPosition = (position: { x: number, y: number }) => {
-    windowPosition.value = { ...position }
-  }
-
   const updateLocale = (newLocale: LocaleKey) => {
     locale.value = newLocale
+  }
+
+  // 待办事项设置相关方法
+  const saveAppSettings = async () => {
+    try {
+      await invoke('save_settings', { settings: appSettings.value })
+    }
+    catch (err) {
+      console.error('Failed to save todo settings:', err)
+      throw err
+    }
+  }
+
+  const updateAppSettings = async (newSettings: Partial<AppSettings>) => {
+    appSettings.value = { ...appSettings.value, ...newSettings }
+    await saveAppSettings()
+  }
+
+  const resetColorsToDefault = async () => {
+    appSettings.value = { ...appSettings.value, colors: { ...defaultAppSettings.colors } }
+    await saveAppSettings()
+  }
+
+  const loadAppSettings = async () => {
+    try {
+      const settingsData = await invoke('load_settings') as AppSettings
+      appSettings.value = { ...defaultAppSettings, ...settingsData }
+    }
+    catch (err) {
+      console.error('Failed to load todo settings:', err)
+      // 如果加载设置失败，使用默认设置
+      appSettings.value = { ...defaultAppSettings }
+    }
   }
 
   // 保存应用设置到本地 JSON 文件
@@ -73,6 +99,7 @@ export const useAppStore = defineStore('app', () => {
         isSettingsOpen: isSettingsOpen.value,
         windowConfig: windowConfig.value,
         locale: locale.value,
+        appSettings: appSettings.value,
       }
       await invoke('save_app_settings', { settings })
     }
@@ -95,6 +122,9 @@ export const useAppStore = defineStore('app', () => {
         if (settings.locale) {
           locale.value = settings.locale
         }
+        if (settings.appSettings) {
+          appSettings.value = { ...defaultAppSettings, ...settings.appSettings }
+        }
       }
     }
     catch (error) {
@@ -114,7 +144,7 @@ export const useAppStore = defineStore('app', () => {
   }
 
   // 监听需要持久化的状态变化
-  watch([isTransparent, windowConfig, locale], debouncedSave, { deep: true })
+  watch([isTransparent, windowConfig, locale, appSettings], debouncedSave, { deep: true })
 
   return {
     // 状态
@@ -122,8 +152,8 @@ export const useAppStore = defineStore('app', () => {
     showBorder,
     isSettingsOpen,
     windowConfig,
-    windowPosition,
     locale,
+    appSettings,
     // 计算属性
     windowStyle,
 
@@ -135,6 +165,12 @@ export const useAppStore = defineStore('app', () => {
     updateWindowConfig,
     updateWindowPosition,
     updateLocale,
+
+    // 待办事项设置相关
+    updateAppSettings,
+    resetColorsToDefault,
+    saveAppSettings,
+    loadAppSettings,
 
     // 持久化相关
     saveState,

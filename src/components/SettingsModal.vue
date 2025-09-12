@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ElButton, ElColorPicker, ElDialog, ElForm, ElFormItem, ElInput, ElMessage, ElMessageBox, ElOption, ElSelect, ElSlider, ElSwitch } from 'element-plus'
+import { ElButton, ElColorPicker, ElDialog, ElForm, ElFormItem, ElInput, ElMessage, ElMessageBox, ElOption, ElSelect, ElSwitch } from 'element-plus'
 import { useAppStore } from '../store/app'
 import { useTodoStore } from '../store/todo'
 
@@ -28,13 +28,13 @@ function closeSettings() {
 // 待办事项设置相关方法
 async function updateArchiveDays(value: number | number[]) {
   const val = Array.isArray(value) ? value[0] : value
-  await todoStore.updateSettings({ archiveDays: val })
+  await appStore.updateAppSettings({ archiveDays: val })
 }
 
 async function updateTodoColor(colorKey: string, color: string | null) {
   if (color) {
-    const colors = { ...todoStore.settings.colors, [colorKey]: color }
-    await todoStore.updateSettings({ colors })
+    const colors = { ...appStore.appSettings.colors, [colorKey]: color }
+    await appStore.updateAppSettings({ colors })
   }
 }
 
@@ -60,17 +60,12 @@ async function resetColorsToDefault() {
       cancelButtonText: '取消',
       type: 'warning',
     })
-    await todoStore.resetColorsToDefault()
+    await appStore.resetColorsToDefault()
     ElMessage.success('颜色设置已恢复为默认值')
   }
   catch {
     // 用户取消操作
   }
-}
-
-function updateOpacity(value: number | number[]) {
-  const val = Array.isArray(value) ? value[0] : value
-  appStore.updateWindowConfig({ opacity: val })
 }
 
 function updateBorderRadius(value: number | number[]) {
@@ -101,17 +96,6 @@ function updateBorderColor(color: string | null) {
           <h3 class="text-lg font-semibold mb-4 pb-2 border-b border-gray-200">
             外观设置
           </h3>
-
-          <ElFormItem label="窗口不透明度">
-            <div class="flex items-center gap-3 w-full">
-              <ElSlider
-                v-model="appStore.windowConfig.opacity" :min="0.1" :max="1" :step="0.1"
-                :format-tooltip="(val: number) => `${Math.round(val * 100)}%`" style="flex: 1"
-                @change="updateOpacity"
-              />
-              <span class="text-sm text-gray-500 min-w-12">{{ Math.round(appStore.windowConfig.opacity * 100) }}%</span>
-            </div>
-          </ElFormItem>
 
           <ElFormItem label="圆角半径">
             <div class="flex items-center gap-3">
@@ -151,7 +135,7 @@ function updateBorderColor(color: string | null) {
           <ElFormItem label="归档时间（天）">
             <div class="flex items-center gap-3">
               <ElInput
-                v-model.number="todoStore.settings.archiveDays"
+                v-model.number="appStore.appSettings.archiveDays"
                 type="number"
                 :min="1"
                 :max="365"
@@ -179,7 +163,7 @@ function updateBorderColor(color: string | null) {
             <ElColorPicker
               show-alpha
               :predefine="predefineColors"
-              :model-value="todoStore.settings.colors.normal"
+              :model-value="appStore.appSettings.colors.normal"
               @change="(color: string | null) => updateTodoColor('normal', color)"
             />
           </ElFormItem>
@@ -188,7 +172,7 @@ function updateBorderColor(color: string | null) {
             <ElColorPicker
               show-alpha
               :predefine="predefineColors"
-              :model-value="todoStore.settings.colors.warning"
+              :model-value="appStore.appSettings.colors.warning"
               @change="(color: string | null) => updateTodoColor('warning', color)"
             />
           </ElFormItem>
@@ -197,7 +181,7 @@ function updateBorderColor(color: string | null) {
             <ElColorPicker
               show-alpha
               :predefine="predefineColors"
-              :model-value="todoStore.settings.colors.urgent"
+              :model-value="appStore.appSettings.colors.urgent"
               @change="(color: string | null) => updateTodoColor('urgent', color)"
             />
           </ElFormItem>
@@ -206,7 +190,7 @@ function updateBorderColor(color: string | null) {
             <ElColorPicker
               show-alpha
               :predefine="predefineColors"
-              :model-value="todoStore.settings.colors.completed"
+              :model-value="appStore.appSettings.colors.completed"
               @change="(color: string | null) => updateTodoColor('completed', color)"
             />
           </ElFormItem>
@@ -215,7 +199,7 @@ function updateBorderColor(color: string | null) {
             <ElColorPicker
               show-alpha
               :predefine="predefineColors"
-              :model-value="todoStore.settings.colors.background"
+              :model-value="appStore.appSettings.colors.background"
               @change="(color: string | null) => updateTodoColor('background', color)"
             />
           </ElFormItem>
@@ -224,7 +208,7 @@ function updateBorderColor(color: string | null) {
             <ElColorPicker
               show-alpha
               :predefine="predefineColors"
-              :model-value="todoStore.settings.colors.border"
+              :model-value="appStore.appSettings.colors.border"
               @change="(color: string | null) => updateTodoColor('border', color)"
             />
           </ElFormItem>

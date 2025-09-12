@@ -1,7 +1,14 @@
-import type { TodoSettings } from '../types/todo'
+import type { AppSettings } from '../types/app'
 
 // 默认设置
-export const defaultTodoSettings: TodoSettings = {
+export const defaultAppSettings: AppSettings = {
+  locale: 'zh-cn',
+  isTransparent: true,
+  windowConfig: {
+    borderRadius: 8,
+    borderColor: '#3b82f6',
+    borderWidth: 2,
+  },
   colors: {
     normal: '#4f2937',
     warning: '#f59e0b', // 黄色

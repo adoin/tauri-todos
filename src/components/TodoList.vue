@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import type { TodoItem } from '../types/todo'
+import type { TodoItem, TodoTimeStatus } from '../types/todo'
 import { ElButton, ElCheckbox, ElDatePicker, ElDialog, ElInput, ElMessageBox } from 'element-plus'
 import { onMounted, ref } from 'vue'
+import { useAppStore } from '../store/app'
 import { useTodoStore } from '../store/todo'
 import { timeUtils } from '../utils/time'
 
 const todoStore = useTodoStore()
+const appStore = useAppStore()
 const newTodoText = ref('')
 const editingId = ref<string | null>(null)
 const editingText = ref('')
@@ -18,11 +20,32 @@ const selectedDate = ref<string | null>(null)
 // 输入框引用
 const mainInputRef = ref<HTMLInputElement>()
 
+// 获取待办事项的时间状态
+function getTodoTimeStatus(todo: TodoItem): TodoTimeStatus {
+  if (!todo.deadline || todo.completed)
+    return 'normal'
+  return timeUtils.getTimeStatus(todo.deadline)
+}
+
+// 获取待办事项的样式颜色
+function getTodoColor(todo: TodoItem): string {
+  if (todo.completed) {
+    return appStore.appSettings.colors.completed
+  }
+
+  const timeStatus = getTodoTimeStatus(todo)
+  switch (timeStatus) {
+    case 'urgent': return appStore.appSettings.colors.urgent
+    case 'warning': return appStore.appSettings.colors.warning
+    default: return appStore.appSettings.colors.normal
+  }
+}
+
 // 加载待办事项和设置
 onMounted(async () => {
   await Promise.all([
     todoStore.loadTodos(),
-    todoStore.loadSettings(),
+    appStore.loadAppSettings(),
   ])
 })
 
@@ -74,7 +97,7 @@ function cancelEdit() {
 
 // 设置截止时间
 function setDeadline(todoId: string) {
-  const currentTodo = todoStore.todos.find(t => t.id === todoId)
+  const currentTodo = todoStore.todos.data.find((t: TodoItem) => t.id === todoId)
   selectedTodoId.value = todoId
   if (currentTodo?.deadline) {
     // 将 ISO 字符串转换为 Date 对象，然后格式化为 YYYY-MM-DD HH:mm 格式
@@ -125,7 +148,7 @@ function getTimeDisplay(todo: TodoItem): string {
   if (!todo.deadline)
     return ''
 
-  const status = todoStore.getTodoTimeStatus(todo)
+  const status = getTodoTimeStatus(todo)
   const timeStr = timeUtils.formatTime(todo.deadline)
 
   switch (status) {
@@ -250,7 +273,7 @@ async function deleteTodoWithConfirm(todoId: string) {
                 v-else
                 class="text-sm leading-relaxed cursor-pointer rounded px-1 py-0.5 text-shadow-sm"
                 :style="{
-                  color: todoStore.getTodoColor(todo),
+                  color: getTodoColor(todo),
                   textDecoration: todo.completed ? 'line-through' : 'none',
                   textShadow: '0 1px 2px rgba(0, 0, 0, 0.8), 0 0 4px rgba(0, 0, 0, 0.5)',
                 }"
@@ -349,7 +372,7 @@ async function deleteTodoWithConfirm(todoId: string) {
                     v-else
                     class="text-sm leading-relaxed cursor-pointer hover:rounded px-1 py-0.5"
                     :style="{
-                      color: todoStore.getTodoColor(child),
+                      color: getTodoColor(child),
                       textDecoration: child.completed ? 'line-through' : 'none',
                       textShadow: '0 1px 2px rgba(0, 0, 0, 0.8), 0 0 4px rgba(0, 0, 0, 0.5)',
                     }"

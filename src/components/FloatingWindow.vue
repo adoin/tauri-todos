@@ -148,8 +148,11 @@ onMounted(async () => {
     appStore.openSettings()
   })
 
-  // 加载应用状态（包含窗口配置）
-  await appStore.loadState()
+  // 加载应用状态（包含窗口配置和待办事项设置）
+  await Promise.all([
+    appStore.loadState(),
+    appStore.loadAppSettings(),
+  ])
 
   // 加载窗口配置（位置和尺寸）
   await loadWindowConfig()
@@ -232,6 +235,5 @@ onUnmounted(() => {
   border-radius: var(--window-border-radius, 8px);
   border: var(--window-border-width, 2px) solid var(--window-border-color, #3b82f6);
   background-color: var(--window-background, transparent);
-  opacity: var(--window-opacity, 0.8);
 }
 </style>
