@@ -44,62 +44,6 @@ pub fn load_todos() -> Result<Value, String> {
     Ok(todos)
 }
 
-/// 保存应用设置
-#[tauri::command]
-pub fn save_settings(settings: Value) -> Result<(), String> {
-    let data_dir = dirs::data_dir()
-        .ok_or("Failed to get data directory")?
-        .join("Ton")
-        .join("data");
-
-    std::fs::create_dir_all(&data_dir)
-        .map_err(|e| format!("Failed to create data directory: {}", e))?;
-
-    let settings_file = data_dir.join("settings.json");
-    let json_str = serde_json::to_string_pretty(&settings)
-        .map_err(|e| format!("Failed to serialize settings: {}", e))?;
-
-    std::fs::write(settings_file, json_str)
-        .map_err(|e| format!("Failed to write settings file: {}", e))?;
-
-    Ok(())
-}
-
-/// 加载应用设置
-#[tauri::command]
-pub fn load_settings() -> Result<Value, String> {
-    let data_dir = dirs::data_dir()
-        .ok_or("Failed to get data directory")?
-        .join("Ton")
-        .join("data");
-
-    let settings_file = data_dir.join("settings.json");
-
-    if !settings_file.exists() {
-        // 返回默认设置
-        return Ok(serde_json::json!({
-            "colors": {
-                "normal": "#1f2937",
-                "warning": "#f59e0b",
-                "urgent": "#ef4444",
-                "completed": "#f5dbd6",
-                "background": "#60a5fa88",
-                "border": "#e5e7eb",
-                "hover": "#f3f4f6"
-            },
-            "archiveDays": 30
-        }));
-    }
-
-    let json_str = std::fs::read_to_string(settings_file)
-        .map_err(|e| format!("Failed to read settings file: {}", e))?;
-
-    let settings: Value = serde_json::from_str(&json_str)
-        .map_err(|e| format!("Failed to parse settings file: {}", e))?;
-
-    Ok(settings)
-}
-
 /// 保存已归档的待办事项
 #[tauri::command]
 pub fn save_archived_todos(archived_todos: Value) -> Result<(), String> {

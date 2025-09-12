@@ -34,17 +34,22 @@ pub fn load_app_settings() -> Result<Value, String> {
     if !config_file.exists() {
         // 返回默认设置（不包含宽高）
         return Ok(serde_json::json!({
-            "isTransparent": true,
-            "showBorder": false,
-            "isSettingsOpen": false,
-            "activeToolbar": false,
             "locale": "zh-cn",
+            "isTransparent": false,
             "windowConfig": {
-                "opacity": 0.8,
-                "borderRadius": 8,
-                "borderColor": "#3b82f6",
-                "borderWidth": 2
-            }
+              "borderRadius": 8,
+              "borderColor": "#3b82f6",
+              "borderWidth": 1,
+            },
+            "colors": {
+              "normal": "#4f2937",
+              "warning": "#f59e0b",
+              "urgent": "#ef4444",
+              "completed": "#f5dbd6",
+              "background": "#60a5fa",
+              "border": "#29cdcd",
+            },
+            "archiveDays": 30
         }));
     }
 

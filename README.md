@@ -83,13 +83,19 @@ src-tauri/              # Tauri 后端
 
 ```vue
 <!-- 使用预设的按钮样式 -->
-<button class="btn btn-primary">确定</button>
+<button class="btn btn-primary">
+确定
+</button>
 
 <!-- 使用颜色变量 -->
-<div class="bg-primary text-white">主要颜色</div>
+<div class="bg-primary text-white">
+主要颜色
+</div>
 
 <!-- 使用响应式设计 -->
-<div class="w-100 md:w-50 lg:w-25">响应式宽度</div>
+<div class="w-100 md:w-50 lg:w-25">
+响应式宽度
+</div>
 ```
 
 ## 📝 开发说明

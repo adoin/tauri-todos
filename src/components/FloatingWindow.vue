@@ -11,23 +11,14 @@ import TodoList from './TodoList.vue'
 const appStore = useAppStore()
 const todoStore = useTodoStore()
 const isDragging = ref(false)
-// const dragOffset = ref({ x: 0, y: 0 })
 const windowElement = ref<HTMLElement>()
 const showToolbarItems = ref(false)
 const syncModalRef = ref<InstanceType<typeof SyncModal>>()
-function handleMouseEnter() {
-  appStore.toggleBorder(true)
-}
-
-function handleMouseLeave() {
-  appStore.toggleBorder(false)
-}
 
 async function handleMouseDown(_event: MouseEvent) {
   // 只有在拖拽手柄上才处理拖拽，不阻止其他事件
   isDragging.value = true
   const window = getCurrentWindow()
-
   // 开始拖拽
   await window.startDragging()
 }
@@ -88,9 +79,6 @@ async function saveWindowConfig() {
         height: size.height,
       },
     })
-
-    // 更新 store 中的位置
-    appStore.updateWindowPosition({ x: position.x, y: position.y })
   }
   catch (error) {
     console.error('Failed to save window config:', error)
@@ -100,8 +88,6 @@ async function saveWindowConfig() {
 async function loadWindowConfig() {
   try {
     const config = await invoke('load_window_config') as any
-    appStore.updateWindowPosition({ x: config.x, y: config.y })
-
     // 设置窗口位置和尺寸
     const window = getCurrentWindow()
 
@@ -151,12 +137,10 @@ onMounted(async () => {
   window.listen('open-settings', () => {
     appStore.openSettings()
   })
-
-  // 加载应用状态（包含窗口配置）
-  await appStore.loadState()
-
   // 加载窗口配置（位置和尺寸）
   await loadWindowConfig()
+  // 加载应用状态（包含窗口配置和待办事项设置）
+  await appStore.loadAppSettings()
 })
 
 onUnmounted(() => {
@@ -174,8 +158,6 @@ onUnmounted(() => {
   <div
     ref="windowElement"
     class="relative backdrop-blur-10px transition-all duration-200 ease-in-out overflow-hidden floating-window"
-    @mouseenter="handleMouseEnter"
-    @mouseleave="handleMouseLeave"
   >
     <!-- 悬浮窗口内容 -->
     <div class="w-full h-full flex flex-col">
@@ -246,6 +228,5 @@ onUnmounted(() => {
   border-radius: var(--window-border-radius, 8px);
   border: var(--window-border-width, 2px) solid var(--window-border-color, #3b82f6);
   background-color: var(--window-background, transparent);
-  opacity: var(--window-opacity, 0.8);
 }
 </style>

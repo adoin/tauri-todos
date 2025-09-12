@@ -1,48 +1,58 @@
 <script setup lang="ts">
 import type { LocaleKey } from './constants/locale'
 import { ElConfigProvider } from 'element-plus'
-import { computed } from 'vue'
+import { computed, onMounted, watch } from 'vue'
 import FloatingWindow from './components/FloatingWindow.vue'
 import SettingsModal from './components/SettingsModal.vue'
 import { locales } from './constants/locale'
 import { useAppStore } from './store/app'
-import { useTodoStore } from './store/todo'
-import { hexToRGB } from './utils/color'
 
 const appStore = useAppStore()
-const todoStore = useTodoStore()
 
 // 计算当前语言配置
 const locale = computed(() => {
-  const currentLocale = appStore.locale as LocaleKey
+  const currentLocale = appStore.appSettings.locale as LocaleKey
   return locales[currentLocale] || locales['zh-cn']
 })
-/* rgb() => rgba() */
-function rgb2rgba(rgb: string, opacity: number) {
-  if (rgb.startsWith('#')) {
-    rgb = hexToRGB(rgb)
-  }
-  return rgb.replace('RGB(', 'RGBA(').replace(')', `, ${opacity})`).toLowerCase()
-}
+
 // 计算 CSS 变量
 const cssVariables = computed(() => ({
   // 窗口配置
-  '--window-opacity': appStore.isTransparent ? appStore.windowConfig.opacity : 1,
-  '--window-border-radius': `${appStore.windowConfig.borderRadius}px`,
-  '--window-border-width': `${appStore.windowConfig.borderWidth}px`,
-  '--window-border-color': appStore.windowConfig.borderColor,
-  '--window-background': appStore.isTransparent ? 'transparent' : rgb2rgba(todoStore.settings.colors.background, appStore.windowConfig.opacity),
+  '--window-border-radius': `${appStore.appSettings.windowConfig.borderRadius}px`,
+  '--window-border-width': `${appStore.appSettings.windowConfig.borderWidth}px`,
+  '--window-border-color': appStore.appSettings.windowConfig.borderColor,
+  '--window-background': appStore.appSettings.isTransparent ? 'transparent' : appStore.appSettings.colors.background,
   // 待办事项颜色配置
-  '--todo-normal-color': todoStore.settings.colors.normal,
-  '--todo-warning-color': todoStore.settings.colors.warning,
-  '--todo-urgent-color': todoStore.settings.colors.urgent,
-  '--todo-completed-color': todoStore.settings.colors.completed,
-  '--todo-border-color': todoStore.settings.colors.border,
+  '--todo-normal-color': appStore.appSettings.colors.normal,
+  '--todo-warning-color': appStore.appSettings.colors.warning,
+  '--todo-urgent-color': appStore.appSettings.colors.urgent,
+  '--todo-completed-color': appStore.appSettings.colors.completed,
+  '--todo-border-color': appStore.appSettings.colors.border,
 }))
+
+// 将CSS变量应用到html元素
+function applyCssVariablesToHtml() {
+  const htmlElement = document.documentElement
+  const variables = cssVariables.value
+
+  Object.entries(variables).forEach(([key, value]) => {
+    htmlElement.style.setProperty(key, value)
+  })
+}
+
+// 组件挂载时应用CSS变量
+onMounted(() => {
+  applyCssVariablesToHtml()
+})
+
+// 监听CSS变量变化，实时更新到html元素
+watch(() => cssVariables.value, () => {
+  applyCssVariablesToHtml()
+}, { deep: true, immediate: true })
 </script>
 
 <template>
-  <div id="app" :style="cssVariables">
+  <div id="app">
     <ElConfigProvider :locale="locale">
       <FloatingWindow />
       <SettingsModal />

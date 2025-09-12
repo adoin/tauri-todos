@@ -5,7 +5,9 @@ html, body {
   background: transparent !important;
   overflow: hidden;
 }
-
+.el-overlay {
+  border-radius: var(--window-border-radius, 8px);
+}
 /* 移除 WebView 默认样式 */
 body {
   -webkit-app-region: no-drag;
