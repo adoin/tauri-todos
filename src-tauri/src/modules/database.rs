@@ -788,9 +788,27 @@ pub async fn get_remote_data_for_comparison(
     // 获取远程设置数据
     let remote_settings = download_settings_data(pool).await?;
     
+    // 获取远程数据的最后更新时间
+    let last_update_query = r#"
+        SELECT MAX(last_update) as last_update 
+        FROM (
+            SELECT last_update FROM todo_items_sync
+            UNION ALL
+            SELECT last_update FROM todo_settings_sync
+        ) as all_updates
+    "#;
+    
+    let last_update_result = sqlx::query(last_update_query)
+        .fetch_one(pool)
+        .await
+        .map_err(|e| format!("获取远程数据更新时间失败: {}", e))?;
+    
+    let last_update: Option<String> = last_update_result.get("last_update");
+    
     let result = serde_json::json!({
         "todos": remote_todos,
-        "settings": remote_settings
+        "settings": remote_settings,
+        "lastUpdate": last_update
     });
     
     Ok(result)

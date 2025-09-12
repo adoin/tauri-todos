@@ -1,6 +1,7 @@
 <script setup lang="ts">
+import { Loading } from '@element-plus/icons-vue'
 import { invoke } from '@tauri-apps/api/core'
-import { ElButton, ElDialog, ElLoading, ElMessage } from 'element-plus'
+import { ElButton, ElDialog, ElIcon, ElMessage } from 'element-plus'
 import { computed, ref } from 'vue'
 import { useAppStore } from '../store/app'
 import { useTodoStore } from '../store/todo'
@@ -122,6 +123,7 @@ async function compareData() {
     localData.value = {
       todos: localTodos.data || [],
       settings: localSettings,
+      lastUpdate: localTodos.lastUpdate,
     }
 
     // 获取远程数据
@@ -130,6 +132,7 @@ async function compareData() {
     remoteData.value = {
       todos: remoteDataResult.todos || [],
       settings: remoteDataResult.settings || {},
+      lastUpdate: remoteDataResult.lastUpdate,
     }
 
     // 比较数据差异
@@ -383,6 +386,32 @@ async function forcePull() {
   }
 }
 
+// 格式化日期时间
+function formatDateTime(dateString: string | undefined | null): string {
+  if (!dateString) {
+    return '未知时间'
+  }
+
+  try {
+    const date = new Date(dateString)
+    if (Number.isNaN(date.getTime())) {
+      return '无效时间'
+    }
+
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    const hours = String(date.getHours()).padStart(2, '0')
+    const minutes = String(date.getMinutes()).padStart(2, '0')
+    const seconds = String(date.getSeconds()).padStart(2, '0')
+
+    return `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`
+  }
+  catch {
+    return '时间格式错误'
+  }
+}
+
 // 打开设置
 function openSettings() {
   close()
@@ -409,11 +438,7 @@ defineExpose({
         </h3>
         <div class="flex items-center gap-2">
           <!-- 连接状态图标 -->
-          <div v-if="loading || comparing" class="flex items-center gap-1 text-gray-500">
-            <ElLoading size="small" />
-            <span class="text-xs">{{ currentStep || (loading ? '检查中...' : '比较中...') }}</span>
-          </div>
-          <div v-else-if="connectionStatus === 'connected'" class="flex items-center gap-1 text-green-600">
+          <div v-if="connectionStatus === 'connected' && !loading && !comparing" class="flex items-center gap-1 text-green-600">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
@@ -482,10 +507,6 @@ defineExpose({
           <h3 class="text-lg font-medium">
             数据比较结果
           </h3>
-          <div v-if="comparing" class="flex items-center gap-2 text-blue-600">
-            <ElLoading size="small" />
-            <span class="text-sm">{{ currentStep || '比较中...' }}</span>
-          </div>
         </div>
 
         <!-- 数据完全一致 -->
@@ -555,6 +576,12 @@ defineExpose({
               <div class="space-y-2">
                 <div class="text-sm font-medium text-blue-600 border-b border-blue-200 pb-1">
                   本地数据
+                  <div v-if="diff.local" class="text-xs text-gray-500 font-normal mt-1">
+                    {{ formatDateTime(diff.local.lastUpdate || diff.local.createdAt) }}
+                  </div>
+                  <div v-else class="text-xs text-gray-500 font-normal mt-1">
+                    {{ formatDateTime(localData?.lastUpdate) }}
+                  </div>
                 </div>
                 <div v-if="diff.local" class="p-3 bg-blue-50 rounded border border-blue-200">
                   <div class="font-medium">
@@ -573,6 +600,12 @@ defineExpose({
               <div class="space-y-2">
                 <div class="text-sm font-medium text-green-600 border-b border-green-200 pb-1">
                   远程数据
+                  <div v-if="diff.remote" class="text-xs text-gray-500 font-normal mt-1">
+                    {{ formatDateTime(diff.remote.lastUpdate || diff.remote.createdAt) }}
+                  </div>
+                  <div v-else class="text-xs text-gray-500 font-normal mt-1">
+                    {{ formatDateTime(remoteData?.lastUpdate) }}
+                  </div>
                 </div>
                 <div v-if="diff.remote" class="p-3 bg-green-50 rounded border border-green-200">
                   <div class="font-medium">
@@ -601,10 +634,12 @@ defineExpose({
         </div>
 
         <!-- 比较中状态 -->
-        <div v-else-if="comparing" class="text-center py-8">
-          <ElLoading size="large" />
+        <div v-else-if="comparing || loading" class="text-center py-8">
+          <ElIcon class="is-loading text-4xl text-blue-600">
+            <Loading />
+          </ElIcon>
           <p class="text-gray-600 mt-3">
-            {{ currentStep || '正在比较本地和远程数据...' }}
+            {{ currentStep || (loading ? '正在检查数据库连接...' : '正在比较本地和远程数据...') }}
           </p>
         </div>
       </div>
