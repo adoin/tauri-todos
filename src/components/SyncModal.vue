@@ -36,6 +36,7 @@ const canSmartSync = computed(() =>
 // 打开模态框
 async function open() {
   visible.value = true
+  resetState()
   await checkDatabaseStatus()
 }
 
@@ -502,15 +503,15 @@ defineExpose({
       </div>
 
       <!-- 数据比较区域 -->
-      <div v-else-if="connectionStatus === 'connected'" class="differences-section">
+      <div v-else-if="connectionStatus === 'connected' || loading || comparing" class="differences-section">
         <div class="flex items-center justify-between mb-4">
           <h3 class="text-lg font-medium">
-            数据比较结果
+            {{ loading ? '数据库连接检查' : comparing ? '数据比较中' : '数据比较结果' }}
           </h3>
         </div>
 
         <!-- 数据完全一致 -->
-        <div v-if="!hasDifferences && !comparing" class="text-center py-8 text-green-600">
+        <div v-if="!hasDifferences && !comparing && !loading && connectionStatus === 'connected'" class="text-center py-8 text-green-600">
           <svg class="w-12 h-12 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
@@ -523,7 +524,7 @@ defineExpose({
         </div>
 
         <!-- 数据差异对比 -->
-        <div v-else-if="hasDifferences && !comparing" class="space-y-4">
+        <div v-else-if="hasDifferences && !comparing && !loading && connectionStatus === 'connected'" class="space-y-4">
           <div
             v-for="diff in differences"
             :key="diff.id || diff.type"
@@ -577,7 +578,7 @@ defineExpose({
                 <div class="text-sm font-medium text-blue-600 border-b border-blue-200 pb-1">
                   本地数据
                   <div v-if="diff.local" class="text-xs text-gray-500 font-normal mt-1">
-                    {{ formatDateTime(diff.local.lastUpdate || diff.local.createdAt) }}
+                    {{ formatDateTime(diff.local.lastUpdate) }}
                   </div>
                   <div v-else class="text-xs text-gray-500 font-normal mt-1">
                     {{ formatDateTime(localData?.lastUpdate) }}
@@ -601,7 +602,7 @@ defineExpose({
                 <div class="text-sm font-medium text-green-600 border-b border-green-200 pb-1">
                   远程数据
                   <div v-if="diff.remote" class="text-xs text-gray-500 font-normal mt-1">
-                    {{ formatDateTime(diff.remote.lastUpdate || diff.remote.createdAt) }}
+                    {{ formatDateTime(diff.remote.lastUpdate) }}
                   </div>
                   <div v-else class="text-xs text-gray-500 font-normal mt-1">
                     {{ formatDateTime(remoteData?.lastUpdate) }}
@@ -633,7 +634,7 @@ defineExpose({
           </div>
         </div>
 
-        <!-- 比较中状态 -->
+        <!-- 加载中状态 -->
         <div v-else-if="comparing || loading" class="text-center py-8">
           <ElIcon class="is-loading text-4xl text-blue-600">
             <Loading />

@@ -767,6 +767,9 @@ async fn download_todos_data(pool: &MySqlPool) -> Result<Vec<Value>, String> {
         // 添加isDeleted字段（虽然查询时已过滤，但保持数据结构一致）
         todo.insert("isDeleted".to_string(), Value::Bool(row.get::<bool, _>("is_deleted")));
         
+        // 添加lastUpdate字段
+        todo.insert("lastUpdate".to_string(), Value::String(row.get::<String, _>("last_update")));
+        
         todos.push(Value::Object(todo));
     }
     
