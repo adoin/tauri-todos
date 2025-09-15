@@ -582,18 +582,20 @@ defineExpose({
               </h4>
             </div>
 
+            <!-- 时间戳信息 -->
+            <div v-if="diff.type !== 'no_diff'" class="mb-3 p-2 bg-gray-50 rounded text-xs text-gray-600">
+              <div class="flex justify-between">
+                <span>本地数据时间: {{ formatDateTime(localData?.lastUpdate) }}</span>
+                <span>远程数据时间: {{ formatDateTime(remoteData?.lastUpdate) }}</span>
+              </div>
+            </div>
+
             <!-- 左右对比显示 -->
             <div v-if="diff.type !== 'no_diff'" class="grid grid-cols-2 gap-4">
               <!-- 本地数据 -->
               <div class="space-y-2">
                 <div class="text-sm font-medium text-blue-600 border-b border-blue-200 pb-1">
                   本地数据
-                  <div v-if="diff.local" class="text-xs text-gray-500 font-normal mt-1">
-                    {{ formatDateTime(diff.local.createdAt) }}
-                  </div>
-                  <div v-else class="text-xs text-gray-500 font-normal mt-1">
-                    {{ formatDateTime(localData?.lastUpdate) }}
-                  </div>
                 </div>
                 <div v-if="diff.local" class="p-3 bg-blue-50 rounded border border-blue-200">
                   <div class="font-medium">
@@ -612,12 +614,6 @@ defineExpose({
               <div class="space-y-2">
                 <div class="text-sm font-medium text-green-600 border-b border-green-200 pb-1">
                   远程数据
-                  <div v-if="diff.remote" class="text-xs text-gray-500 font-normal mt-1">
-                    {{ formatDateTime(diff.remote.createdAt) }}
-                  </div>
-                  <div v-else class="text-xs text-gray-500 font-normal mt-1">
-                    {{ formatDateTime(remoteData?.lastUpdate) }}
-                  </div>
                 </div>
                 <div v-if="diff.remote" class="p-3 bg-green-50 rounded border border-green-200">
                   <div class="font-medium">
