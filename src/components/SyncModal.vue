@@ -1,4 +1,15 @@
 <script setup lang="ts">
+import type {
+  AppSettings,
+  ConnectionStatus,
+  DatabaseConfig,
+  DataDifference,
+  LocalData,
+  RemoteData,
+  SyncResult,
+} from '../types/database'
+import type { TodoData, TodoItem } from '../types/todo'
+
 import { Loading } from '@element-plus/icons-vue'
 import { invoke } from '@tauri-apps/api/core'
 import { ElButton, ElDialog, ElIcon, ElMessage } from 'element-plus'
@@ -16,12 +27,12 @@ const syncLoading = ref(false)
 
 // 数据状态
 const hasConfig = ref(false)
-const connectionStatus = ref<'checking' | 'connected' | 'failed' | 'no-config'>('checking')
-const syncData = ref<any>(null)
-const differences = ref<any[]>([])
+const connectionStatus = ref<ConnectionStatus>('checking')
+const syncData = ref<SyncResult | null>(null)
+const differences = ref<DataDifference[]>([])
 const comparing = ref(false)
-const localData = ref<any>(null)
-const remoteData = ref<any>(null)
+const localData = ref<LocalData | null>(null)
+const remoteData = ref<RemoteData | null>(null)
 const currentStep = ref('')
 
 // 计算属性
@@ -67,7 +78,7 @@ async function checkDatabaseStatus() {
   try {
     // 1. 检查是否有数据库配置
     currentStep.value = '检查数据库配置...'
-    const config = await invoke('load_database_config') as any
+    const config = await invoke('load_database_config') as DatabaseConfig | null
     if (!config) {
       connectionStatus.value = 'no-config'
       hasConfig.value = false
@@ -79,7 +90,7 @@ async function checkDatabaseStatus() {
 
     // 2. 测试数据库连接
     currentStep.value = '测试数据库连接...'
-    const isConnected = await invoke('test_database_connection', { config })
+    const isConnected = await invoke('test_database_connection', { config }) as boolean
     if (!isConnected) {
       connectionStatus.value = 'failed'
       currentStep.value = ''
@@ -118,8 +129,8 @@ async function compareData() {
   try {
     // 获取本地数据
     currentStep.value = '获取本地数据...'
-    const localTodos = await invoke('load_todos') as any
-    const localSettings = await invoke('load_app_settings') as any
+    const localTodos = await invoke('load_todos') as TodoData
+    const localSettings = await invoke('load_app_settings') as AppSettings
 
     localData.value = {
       todos: localTodos.data || [],
@@ -129,7 +140,7 @@ async function compareData() {
 
     // 获取远程数据
     currentStep.value = '获取远程数据...'
-    const remoteDataResult = await invoke('get_remote_data_for_comparison') as any
+    const remoteDataResult = await invoke('get_remote_data_for_comparison') as RemoteData
     remoteData.value = {
       todos: remoteDataResult.todos || [],
       settings: remoteDataResult.settings || {},
@@ -159,20 +170,20 @@ async function compareData() {
 }
 
 // 比较数据差异
-function compareDataDifferences(localTodos: any, remoteTodos: any, _localSettings: any, _remoteSettings: any) {
-  const diffs: any[] = []
+function compareDataDifferences(localTodos: TodoItem[], remoteTodos: TodoItem[], _localSettings: AppSettings, _remoteSettings: AppSettings): DataDifference[] {
+  const diffs: DataDifference[] = []
 
   // 创建本地和远程待办事项的映射
   const localMap = new Map()
   const remoteMap = new Map()
 
   // 填充本地数据映射
-  localTodos.forEach((todo: any) => {
+  localTodos.forEach((todo: TodoItem) => {
     localMap.set(todo.id, todo)
   })
 
   // 填充远程数据映射
-  remoteTodos.forEach((todo: any) => {
+  remoteTodos.forEach((todo: TodoItem) => {
     remoteMap.set(todo.id, todo)
   })
 
@@ -232,8 +243,8 @@ function compareDataDifferences(localTodos: any, remoteTodos: any, _localSetting
       type: 'no_diff',
       title: '数据完全一致',
       description: '本地和远程数据完全相同，无需同步',
-      local: localTodos.length,
-      remote: remoteTodos.length,
+      local: null,
+      remote: null,
     })
   }
 
@@ -261,7 +272,7 @@ async function performSync() {
     await invoke('connect_database', { config })
     await invoke('check_and_initialize_tables')
 
-    const result = await invoke('start_database_sync') as any
+    const result = await invoke('start_database_sync') as SyncResult
 
     if (result.success) {
       ElMessage.success(result.message)
@@ -298,7 +309,7 @@ async function forcePush() {
     }
 
     // 重新建立连接以确保连接有效
-    const config = await invoke('load_database_config') as any
+    const config = await invoke('load_database_config') as DatabaseConfig | null
     if (!config) {
       ElMessage.error('数据库配置不存在')
       return
@@ -309,7 +320,7 @@ async function forcePush() {
 
     // 使用同步功能，但强制推送本地数据
     // 这里需要修改本地时间戳来确保本地数据被认为是更新的
-    const localTodos = await invoke('load_todos') as any
+    const localTodos = await invoke('load_todos') as TodoData
 
     // 更新本地时间戳为未来时间，确保本地数据被认为是更新的
     const futureTime = new Date(Date.now() + 60000).toISOString() // 1分钟后
@@ -322,7 +333,7 @@ async function forcePush() {
     await invoke('save_todos', { todos: updatedTodos })
 
     // 执行同步，由于本地时间更新，会自动推送本地数据
-    const syncResult = await invoke('start_database_sync') as any
+    const syncResult = await invoke('start_database_sync') as SyncResult
     if (!syncResult.success) {
       throw new Error(syncResult.message || '同步失败')
     }
@@ -353,7 +364,7 @@ async function forcePull() {
     }
 
     // 重新建立连接以确保连接有效
-    const config = await invoke('load_database_config') as any
+    const config = await invoke('load_database_config') as DatabaseConfig | null
     if (!config) {
       ElMessage.error('数据库配置不存在')
       return
@@ -363,7 +374,7 @@ async function forcePull() {
     await invoke('check_and_initialize_tables')
 
     // 从远程下载数据 - 使用同步功能来获取远程数据
-    const syncResult = await invoke('start_database_sync') as any
+    const syncResult = await invoke('start_database_sync') as SyncResult
     if (!syncResult.success) {
       throw new Error(syncResult.message || '同步失败')
     }
@@ -578,7 +589,7 @@ defineExpose({
                 <div class="text-sm font-medium text-blue-600 border-b border-blue-200 pb-1">
                   本地数据
                   <div v-if="diff.local" class="text-xs text-gray-500 font-normal mt-1">
-                    {{ formatDateTime(diff.local.lastUpdate) }}
+                    {{ formatDateTime(diff.local.createdAt) }}
                   </div>
                   <div v-else class="text-xs text-gray-500 font-normal mt-1">
                     {{ formatDateTime(localData?.lastUpdate) }}
@@ -602,7 +613,7 @@ defineExpose({
                 <div class="text-sm font-medium text-green-600 border-b border-green-200 pb-1">
                   远程数据
                   <div v-if="diff.remote" class="text-xs text-gray-500 font-normal mt-1">
-                    {{ formatDateTime(diff.remote.lastUpdate) }}
+                    {{ formatDateTime(diff.remote.createdAt) }}
                   </div>
                   <div v-else class="text-xs text-gray-500 font-normal mt-1">
                     {{ formatDateTime(remoteData?.lastUpdate) }}
