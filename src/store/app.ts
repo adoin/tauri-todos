@@ -1,5 +1,14 @@
 import type { LocaleKey } from '../constants/locale'
 import type { AppSettings, WindowConfig } from '../types/app'
+
+// 全局通知类型
+export interface GlobalNotification {
+  id: string
+  type: 'info' | 'success' | 'warning' | 'error'
+  message: string
+  timestamp: string
+  duration?: number // 显示时长（毫秒），0表示不自动消失
+}
 import { invoke } from '@tauri-apps/api/core'
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
@@ -14,6 +23,10 @@ export const useAppStore = defineStore('app', () => {
   const syncStore = useSyncStore()
   // 待办事项设置
   const appSettings = ref<AppSettings>({ ...defaultAppSettings })
+  
+  // 全局通知状态
+  const globalNotifications = ref<GlobalNotification[]>([])
+  const currentNotification = ref<GlobalNotification | null>(null)
 
   // 计算属性
   const windowStyle = computed(() => ({
@@ -95,11 +108,61 @@ export const useAppStore = defineStore('app', () => {
     }
   }
 
+  // 通知相关方法
+  const showNotification = (type: GlobalNotification['type'], message: string, duration = 3000) => {
+    const notification: GlobalNotification = {
+      id: `notification_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      type,
+      message,
+      timestamp: new Date().toISOString(),
+      duration,
+    }
+
+    // 添加到通知列表
+    globalNotifications.value.push(notification)
+    
+    // 设置为当前通知
+    currentNotification.value = notification
+
+    // 如果设置了自动消失时间，则自动清除
+    if (duration > 0) {
+      setTimeout(() => {
+        removeNotification(notification.id)
+      }, duration)
+    }
+  }
+
+  const removeNotification = (id: string) => {
+    const index = globalNotifications.value.findIndex(n => n.id === id)
+    if (index > -1) {
+      globalNotifications.value.splice(index, 1)
+    }
+    
+    // 如果移除的是当前通知，清除当前通知
+    if (currentNotification.value?.id === id) {
+      currentNotification.value = null
+    }
+  }
+
+  const clearAllNotifications = () => {
+    globalNotifications.value = []
+    currentNotification.value = null
+  }
+
+  // 便捷方法
+  const showInfo = (message: string, duration = 3000) => showNotification('info', message, duration)
+  const showSuccess = (message: string, duration = 3000) => showNotification('success', message, duration)
+  const showWarning = (message: string, duration = 5000) => showNotification('warning', message, duration)
+  const showError = (message: string, duration = 0) => showNotification('error', message, duration) // 错误通知不自动消失
+
   return {
     // 状态
     isSettingsOpen,
     appSettings,
     windowStyle,
+    globalNotifications,
+    currentNotification,
+    // 方法
     toggleTransparency,
     toggleBorder,
     openSettings,
@@ -110,5 +173,13 @@ export const useAppStore = defineStore('app', () => {
     resetColorsToDefault,
     saveAppSettings,
     loadAppSettings,
+    // 通知方法
+    showNotification,
+    removeNotification,
+    clearAllNotifications,
+    showInfo,
+    showSuccess,
+    showWarning,
+    showError,
   }
 })

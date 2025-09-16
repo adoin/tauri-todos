@@ -20,6 +20,8 @@ export interface AppSettings {
   // 回收时间设置（天数）
   archiveDays: number
   windowConfig: WindowConfig
+  // 自动同步周期设置
+  autoSync?: string // 自动同步周期，格式如 "0", "1h", "15m" 等
   lastUpdate?: string
 }
 export interface WindowPosition {

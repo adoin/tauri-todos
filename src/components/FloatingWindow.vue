@@ -5,6 +5,7 @@ import { getCurrentWindow } from '@tauri-apps/api/window'
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useAppStore } from '../store/app'
 import { useTodoStore } from '../store/todo'
+import GlobalFooter from './GlobalFooter.vue'
 import SyncModal from './SyncModal.vue'
 import TodoList from './TodoList.vue'
 
@@ -218,6 +219,9 @@ onUnmounted(() => {
 
     <!-- 同步模态框 -->
     <SyncModal ref="syncModalRef" />
+    
+    <!-- 全局Footer -->
+    <GlobalFooter />
   </div>
 </template>
 

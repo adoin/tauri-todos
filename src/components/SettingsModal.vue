@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ElButton, ElColorPicker, ElDialog, ElForm, ElFormItem, ElInput, ElMessage, ElMessageBox, ElOption, ElSelect, ElSwitch } from 'element-plus'
 import { ref } from 'vue'
+import type { FormInstance, FormRules } from 'element-plus'
 import { useAppStore } from '../store/app'
 import { useTodoStore } from '../store/todo'
 import DatabaseConfigModal from './DatabaseConfigModal.vue'
@@ -10,6 +11,49 @@ const todoStore = useTodoStore()
 
 // 数据库配置模态框状态
 const isDatabaseConfigOpen = ref(false)
+
+// 表单引用
+const formRef = ref<FormInstance>()
+
+// 自动同步验证规则
+const autoSyncRules: FormRules = {
+  autoSync: [
+    {
+      validator: (_rule: any, value: string, callback: any) => {
+        if (!value || value === '0') {
+          callback() // 0 表示不自动同步，允许
+          return
+        }
+
+        // 验证格式：数字 + 单位 (m/h)
+        const pattern = /^(\d+)([mh])$/
+        if (!pattern.test(value)) {
+          callback(new Error('格式错误，请输入如 "15m" 或 "1h" 的格式'))
+          return
+        }
+
+        const match = value.match(pattern)
+        if (match) {
+          const num = Number.parseInt(match[1])
+          const unit = match[2]
+
+          if (unit === 'm' && (num < 1 || num > 1440)) {
+            callback(new Error('分钟数必须在1-1440之间'))
+            return
+          }
+
+          if (unit === 'h' && (num < 1 || num > 24)) {
+            callback(new Error('小时数必须在1-24之间'))
+            return
+          }
+        }
+
+        callback()
+      },
+      trigger: 'blur',
+    },
+  ],
+}
 
 const predefineColors = [
   '#ff4500',
@@ -101,6 +145,11 @@ function onSyncCompleted(result: any) {
     // 关闭同步配置的弹窗
     isDatabaseConfigOpen.value = false
   }
+}
+
+// 自动同步设置更新
+async function updateAutoSync(value: string) {
+  await appStore.updateAppSettings({ autoSync: value })
 }
 </script>
 
@@ -259,6 +308,24 @@ function onSyncCompleted(result: any) {
             </ElButton>
             <div class="text-sm text-gray-500 mt-1">
               配置 MySQL 数据库连接，实现多设备数据同步
+            </div>
+          </ElFormItem>
+
+          <ElFormItem label="自动同步周期" prop="autoSync" :rules="autoSyncRules">
+            <ElInput
+              v-model="appStore.appSettings.autoSync"
+              placeholder="0 (不自动同步) 或 15m (15分钟) 或 1h (1小时)"
+              @blur="() => updateAutoSync(appStore.appSettings.autoSync || '0')"
+              clearable
+            >
+              <template #append>
+                <span class="text-xs text-gray-500">
+                  0=关闭 | m=分钟 | h=小时
+                </span>
+              </template>
+            </ElInput>
+            <div class="text-sm text-gray-500 mt-1">
+              设置自动同步间隔，0表示不自动同步
             </div>
           </ElFormItem>
         </div>

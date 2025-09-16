@@ -4,6 +4,7 @@ import type { DatabaseConfig, SyncResult, SyncStatus } from '../types/database'
 import { invoke } from '@tauri-apps/api/core'
 import { ElAlert, ElButton, ElDialog, ElForm, ElFormItem, ElInput, ElInputNumber, ElMessage, ElMessageBox } from 'element-plus'
 import { computed, reactive, ref, watch } from 'vue'
+import { useAppStore } from '../store/app'
 
 // Props
 interface Props {
@@ -13,11 +14,14 @@ interface Props {
 // Emits
 interface Emits {
   (e: 'update:modelValue', value: boolean): void
-  (e: 'sync-completed', result: SyncResult): void
+  (e: 'syncCompleted', result: SyncResult): void
+  (e: 'configSaved', config: DatabaseConfig): void
 }
 
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
+
+const appStore = useAppStore()
 
 // 响应式数据
 const visible = computed({
@@ -95,10 +99,12 @@ async function testConnection() {
     if (result) {
       syncStatus.value.isConnected = true
       ElMessage.success('数据库连接成功')
+      appStore.showSuccess('数据库连接成功')
     }
     else {
       syncStatus.value.isConnected = false
       ElMessage.error('数据库连接失败')
+      appStore.showError('数据库连接失败')
     }
   }
   catch (error) {
@@ -106,6 +112,7 @@ async function testConnection() {
     syncStatus.value.isConnected = false
     syncStatus.value.error = error instanceof Error ? error.message : '连接失败'
     ElMessage.error('连接测试失败')
+    appStore.showError('连接测试失败')
   }
   finally {
     testing.value = false
@@ -135,6 +142,9 @@ async function startSync() {
     // 保存数据库配置
     await invoke('save_database_config', { config: form })
 
+    // 发射配置保存事件
+    emit('configSaved', form)
+
     // 建立数据库连接
     await invoke('connect_database', { config: form })
 
@@ -148,16 +158,19 @@ async function startSync() {
     if (result.success) {
       syncStatus.value.lastSyncTime = new Date().toISOString()
       ElMessage.success(result.message)
-      emit('sync-completed', result)
+      appStore.showSuccess('数据库同步配置完成')
+      emit('syncCompleted', result)
     }
     else {
       ElMessage.error(result.message)
+      appStore.showError(`同步失败: ${result.message}`)
     }
   }
   catch (error) {
     if (error !== 'cancel') {
       console.error('同步失败:', error)
       ElMessage.error('同步失败')
+      appStore.showError('同步失败')
     }
   }
   finally {

@@ -18,4 +18,5 @@ export const defaultAppSettings: AppSettings = {
     border: '#29cdcd',
   },
   archiveDays: 30, // 默认30天后归档
+  autoSync: '0', // 默认不自动同步
 }

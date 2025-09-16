@@ -1,8 +1,6 @@
 <script setup lang="ts">
 import type {
   AppSettings,
-  ConnectionStatus,
-  DatabaseConfig,
   DataDifference,
   LocalData,
   RemoteData,
@@ -15,9 +13,11 @@ import { invoke } from '@tauri-apps/api/core'
 import { ElButton, ElDialog, ElIcon, ElMessage } from 'element-plus'
 import { computed, ref } from 'vue'
 import { useAppStore } from '../store/app'
+import { useSyncStore } from '../store/sync'
 import { useTodoStore } from '../store/todo'
 
 const appStore = useAppStore()
+const syncStore = useSyncStore()
 const todoStore = useTodoStore()
 
 // 模态框状态
@@ -26,8 +26,6 @@ const loading = ref(false)
 const syncLoading = ref(false)
 
 // 数据状态
-const hasConfig = ref(false)
-const connectionStatus = ref<ConnectionStatus>('checking')
 const syncData = ref<SyncResult | null>(null)
 const differences = ref<DataDifference[]>([])
 const comparing = ref(false)
@@ -40,7 +38,7 @@ const hasDifferences = computed(() => differences.value.length > 0)
 const canSmartSync = computed(() =>
   !comparing.value
   && !loading.value
-  && connectionStatus.value === 'connected'
+  && syncStore.connectionStatus === 'connected'
   && differences.value.length > 0,
 )
 
@@ -59,7 +57,6 @@ function close() {
 
 // 重置状态
 function resetState() {
-  connectionStatus.value = 'checking'
   syncData.value = null
   differences.value = []
   loading.value = false
@@ -70,52 +67,23 @@ function resetState() {
   currentStep.value = ''
 }
 
-// 检查数据库状态
+// 检查数据库状态并比较数据
 async function checkDatabaseStatus() {
   loading.value = true
-  connectionStatus.value = 'checking'
 
   try {
-    // 1. 检查是否有数据库配置
-    currentStep.value = '检查数据库配置...'
-    const config = await invoke('load_database_config') as DatabaseConfig | null
-    if (!config) {
-      connectionStatus.value = 'no-config'
-      hasConfig.value = false
-      currentStep.value = ''
-      return
+    // 如果数据库未连接，先尝试连接
+    if (syncStore.connectionStatus !== 'connected') {
+      await syncStore.initializeDatabaseConnection()
     }
 
-    hasConfig.value = true
-
-    // 2. 测试数据库连接
-    currentStep.value = '测试数据库连接...'
-    const isConnected = await invoke('test_database_connection', { config }) as boolean
-    if (!isConnected) {
-      connectionStatus.value = 'failed'
-      currentStep.value = ''
-      return
+    // 如果连接成功，比较数据
+    if (syncStore.connectionStatus === 'connected') {
+      await compareData()
     }
-
-    connectionStatus.value = 'connected'
-
-    // 3. 建立连接并检查表结构
-    currentStep.value = '建立数据库连接...'
-    await invoke('connect_database', { config })
-
-    currentStep.value = '检查表结构...'
-    await invoke('check_and_initialize_tables')
-
-    // 4. 比较数据
-    currentStep.value = ''
-    await compareData()
-
-    console.log('数据库连接检查完成，状态:', connectionStatus.value)
   }
   catch (error) {
     console.error('Database check failed:', error)
-    connectionStatus.value = 'failed'
-    currentStep.value = ''
     ElMessage.error('数据库连接失败，请检查配置')
   }
   finally {
@@ -257,25 +225,16 @@ async function performSync() {
 
   try {
     // 确保数据库连接有效
-    if (connectionStatus.value !== 'connected') {
+    if (syncStore.connectionStatus !== 'connected') {
       ElMessage.error('数据库连接未建立，请重新检查连接')
       return
     }
 
-    // 重新建立连接以确保连接有效
-    const config = await invoke('load_database_config') as any
-    if (!config) {
-      ElMessage.error('数据库配置不存在')
-      return
-    }
-
-    await invoke('connect_database', { config })
-    await invoke('check_and_initialize_tables')
-
-    const result = await invoke('start_database_sync') as SyncResult
+    const result = await syncStore.startSync()
 
     if (result.success) {
       ElMessage.success(result.message)
+      appStore.showSuccess('数据同步成功')
 
       // 重新加载本地数据
       await todoStore.loadTodos()
@@ -285,12 +244,14 @@ async function performSync() {
     }
     else {
       ElMessage.error(result.message || '同步失败')
+      appStore.showError(result.message || '同步失败')
     }
   }
   catch (error) {
     console.error('Sync failed:', error)
     const errorMessage = error instanceof Error ? error.message : String(error)
     ElMessage.error(`同步失败: ${errorMessage}`)
+    appStore.showError(`同步失败: ${errorMessage}`)
   }
   finally {
     syncLoading.value = false
@@ -303,20 +264,10 @@ async function forcePush() {
 
   try {
     // 确保数据库连接有效
-    if (connectionStatus.value !== 'connected') {
+    if (syncStore.connectionStatus !== 'connected') {
       ElMessage.error('数据库连接未建立，请重新检查连接')
       return
     }
-
-    // 重新建立连接以确保连接有效
-    const config = await invoke('load_database_config') as DatabaseConfig | null
-    if (!config) {
-      ElMessage.error('数据库配置不存在')
-      return
-    }
-
-    await invoke('connect_database', { config })
-    await invoke('check_and_initialize_tables')
 
     // 使用同步功能，但强制推送本地数据
     // 这里需要修改本地时间戳来确保本地数据被认为是更新的
@@ -333,7 +284,7 @@ async function forcePush() {
     await invoke('save_todos', { todos: updatedTodos })
 
     // 执行同步，由于本地时间更新，会自动推送本地数据
-    const syncResult = await invoke('start_database_sync') as SyncResult
+    const syncResult = await syncStore.startSync()
     if (!syncResult.success) {
       throw new Error(syncResult.message || '同步失败')
     }
@@ -358,23 +309,13 @@ async function forcePull() {
 
   try {
     // 确保数据库连接有效
-    if (connectionStatus.value !== 'connected') {
+    if (syncStore.connectionStatus !== 'connected') {
       ElMessage.error('数据库连接未建立，请重新检查连接')
       return
     }
 
-    // 重新建立连接以确保连接有效
-    const config = await invoke('load_database_config') as DatabaseConfig | null
-    if (!config) {
-      ElMessage.error('数据库配置不存在')
-      return
-    }
-
-    await invoke('connect_database', { config })
-    await invoke('check_and_initialize_tables')
-
     // 从远程下载数据 - 使用同步功能来获取远程数据
-    const syncResult = await invoke('start_database_sync') as SyncResult
+    const syncResult = await syncStore.startSync()
     if (!syncResult.success) {
       throw new Error(syncResult.message || '同步失败')
     }
@@ -450,30 +391,38 @@ defineExpose({
         </h3>
         <div class="flex items-center gap-2">
           <!-- 连接状态图标 -->
-          <div v-if="connectionStatus === 'connected' && !loading && !comparing" class="flex items-center gap-1 text-green-600">
+          <div v-if="syncStore.connectionStatus === 'connected' && !loading && !comparing" class="flex items-center gap-1 text-green-600">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <span class="text-xs">已连接</span>
           </div>
-          <div v-else-if="connectionStatus === 'failed'" class="flex items-center gap-1 text-red-600">
+          <div v-else-if="syncStore.connectionStatus === 'failed'" class="flex items-center gap-1 text-red-600">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <span class="text-xs">连接失败</span>
           </div>
-          <div v-else-if="connectionStatus === 'no-config'" class="flex items-center gap-1 text-orange-600">
+          <div v-else-if="syncStore.connectionStatus === 'no-config'" class="flex items-center gap-1 text-orange-600">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
             </svg>
             <span class="text-xs">未配置</span>
+          </div>
+
+          <!-- 自动同步状态 -->
+          <div v-if="syncStore.connectionStatus === 'connected' && syncStore.isAutoSyncEnabled" class="flex items-center gap-1 text-blue-600">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+            </svg>
+            <span class="text-xs">自动同步</span>
           </div>
         </div>
       </div>
     </template>
     <div class="sync-modal-content">
       <!-- 未配置状态 -->
-      <div v-if="connectionStatus === 'no-config'" class="text-center py-8">
+      <div v-if="syncStore.connectionStatus === 'no-config'" class="text-center py-8">
         <div class="text-gray-600 mb-6">
           <svg class="w-16 h-16 mx-auto mb-4 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -491,7 +440,7 @@ defineExpose({
       </div>
 
       <!-- 连接失败状态 -->
-      <div v-else-if="connectionStatus === 'failed'" class="text-center py-8">
+      <div v-else-if="syncStore.connectionStatus === 'failed'" class="text-center py-8">
         <div class="text-red-600 mb-6">
           <svg class="w-16 h-16 mx-auto mb-4 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -514,15 +463,32 @@ defineExpose({
       </div>
 
       <!-- 数据比较区域 -->
-      <div v-else-if="connectionStatus === 'connected' || loading || comparing" class="differences-section">
+      <div v-else-if="syncStore.connectionStatus === 'connected' || loading || comparing" class="differences-section">
         <div class="flex items-center justify-between mb-4">
           <h3 class="text-lg font-medium">
             {{ loading ? '数据库连接检查' : comparing ? '数据比较中' : '数据比较结果' }}
           </h3>
         </div>
 
+        <!-- 自动同步状态信息 -->
+        <div v-if="syncStore.connectionStatus === 'connected' && !loading && !comparing" class="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+          <div class="flex items-center justify-between text-sm">
+            <div class="flex items-center gap-2">
+              <svg class="w-4 h-4 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+              <span class="text-blue-800 font-medium">
+                自动同步: {{ syncStore.formatAutoSyncInterval(syncStore.autoSyncInterval) }}
+              </span>
+            </div>
+            <div v-if="syncStore.nextAutoSyncTime" class="text-blue-600">
+              下次同步: {{ syncStore.nextAutoSyncTime }}
+            </div>
+          </div>
+        </div>
+
         <!-- 数据完全一致 -->
-        <div v-if="!hasDifferences && !comparing && !loading && connectionStatus === 'connected'" class="text-center py-8 text-green-600">
+        <div v-if="!hasDifferences && !comparing && !loading && syncStore.connectionStatus === 'connected'" class="text-center py-8 text-green-600">
           <svg class="w-12 h-12 mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
@@ -535,7 +501,7 @@ defineExpose({
         </div>
 
         <!-- 数据差异对比 -->
-        <div v-else-if="hasDifferences && !comparing && !loading && connectionStatus === 'connected'" class="space-y-4">
+        <div v-else-if="hasDifferences && !comparing && !loading && syncStore.connectionStatus === 'connected'" class="space-y-4">
           <div
             v-for="diff in differences"
             :key="diff.id || diff.type"
@@ -660,7 +626,7 @@ defineExpose({
           关闭
         </ElButton>
 
-        <div v-if="connectionStatus === 'connected'" class="flex gap-2">
+        <div v-if="syncStore.connectionStatus === 'connected'" class="flex gap-2">
           <ElButton
             v-if="hasDifferences"
             type="warning"

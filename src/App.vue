@@ -7,8 +7,10 @@ import FloatingWindow from './components/FloatingWindow.vue'
 import SettingsModal from './components/SettingsModal.vue'
 import { locales } from './constants/locale'
 import { useAppStore } from './store/app'
+import { useSyncStore } from './store/sync'
 
 const appStore = useAppStore()
+const syncStore = useSyncStore()
 
 // 计算当前语言配置
 const locale = computed(() => {
@@ -52,6 +54,9 @@ onMounted(async () => {
   // 设置加载完成后再次应用CSS变量，确保使用最新配置
   applyCssVariablesToHtml()
 
+  // 初始化数据库连接和自动同步
+  await syncStore.initializeDatabaseConnection()
+
   // 配置加载完成后显示窗口
   await showMainWindow()
 })
@@ -70,6 +75,16 @@ async function showMainWindow() {
 watch(() => cssVariables.value, () => {
   applyCssVariablesToHtml()
 }, { deep: true, immediate: true })
+
+// 监听连接状态变化，协调自动同步
+watch(() => syncStore.connectionStatus, (newStatus) => {
+  syncStore.handleConnectionStatusChange(newStatus)
+})
+
+// 监听自动同步配置变化，协调自动同步
+watch(() => appStore.appSettings.autoSync, (newAutoSync, oldAutoSync) => {
+  syncStore.handleAutoSyncConfigChange(newAutoSync, oldAutoSync)
+})
 </script>
 
 <template>
