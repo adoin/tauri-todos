@@ -121,6 +121,12 @@ pub fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                                 }
                             }
                         }
+
+                        // 设置窗口到桌面层级（macOS特定）
+                        #[cfg(target_os = "macos")]
+                        {
+                            setup_window_layer_macos(&window);
+                        }
                     }
                 }
             }
@@ -166,4 +172,48 @@ pub fn setup_window_layer(window: &tauri::WebviewWindow) {
             set_window_pos(hwnd_ptr, 1 as *mut c_void, 0, 0, 0, 0, 0x0013);
         }
     }
+}
+
+/// 设置窗口层级（macOS特定）
+#[cfg(target_os = "macos")]
+pub fn setup_window_layer_macos(window: &tauri::WebviewWindow) {
+    // 在macOS上，我们使用更简单的方法来设置窗口层级
+    // 通过设置窗口的always_on_top为false，并调整窗口级别
+    if let Ok(ns_window) = window.ns_window() {
+        unsafe {
+            use std::ffi::c_void;
+            use std::os::raw::c_long;
+            
+            // 获取NSWindow对象
+            let ns_window_ptr = ns_window.0 as *mut c_void;
+            
+            // 使用Objective-C运行时来调用NSWindow方法
+            if let Ok(objc) = libloading::Library::new("/usr/lib/libobjc.dylib") {
+                if let Ok(msg_send) = objc.get::<unsafe extern "C" fn(*mut c_void, *mut c_void, ...) -> *mut c_void>(b"objc_msgSend") {
+                    if let Ok(sel_register_name) = objc.get::<unsafe extern "C" fn(*const std::os::raw::c_char) -> *mut c_void>(b"sel_registerName") {
+                        
+                        // 获取NSWindow的setLevel:方法选择器
+                        let set_level_sel = sel_register_name(b"setLevel:\0".as_ptr() as *const std::os::raw::c_char);
+                        
+                        // 使用NSNormalWindowLevel (0) 或稍低的级别
+                        // 这样窗口会显示在桌面之上，但在其他应用窗口之下
+                        let normal_level = 0i64 as c_long;
+                        
+                        // 调用setLevel:方法
+                        msg_send(ns_window_ptr, set_level_sel, normal_level);
+                        
+                        // 可选：设置窗口为不可获得焦点（如果需要的话）
+                        // let set_can_become_key_sel = sel_register_name(b"setCanBecomeKey:\0".as_ptr() as *const std::os::raw::c_char);
+                        // msg_send(ns_window_ptr, set_can_become_key_sel, false);
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// 设置窗口层级（macOS特定）- 在应用启动时调用
+#[cfg(target_os = "macos")]
+pub fn setup_window_layer(window: &tauri::WebviewWindow) {
+    setup_window_layer_macos(window);
 }

@@ -25,7 +25,13 @@ pub fn run() {
             // 在启动时就设置窗口层级
             let window = app.get_webview_window("main").unwrap();
 
+            // 设置窗口层级（平台特定）
             #[cfg(target_os = "windows")]
+            {
+                modules::tray::setup_window_layer(&window);
+            }
+            
+            #[cfg(target_os = "macos")]
             {
                 modules::tray::setup_window_layer(&window);
             }

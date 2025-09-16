@@ -1,7 +1,7 @@
 {
-  "name": "ton",
+  "name": "Ton",
   "type": "module",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "scripts": {
     "dev": "vite",
@@ -10,7 +10,13 @@
     "preview": "vite preview",
     "tauri": "tauri",
     "lint": "cross-env NODE_OPTIONS=--no-warnings eslint .",
-    "lint:fix": "cross-env NODE_OPTIONS=--no-warnings eslint . --fix"
+    "lint:fix": "cross-env NODE_OPTIONS=--no-warnings eslint . --fix",
+    "tauri:build": "tauri build",
+    "tauri:build:windows": "tauri build --target x86_64-pc-windows-msvc",
+    "tauri:build:macos": "tauri build --target x86_64-apple-darwin",
+    "tauri:build:macos-arm": "tauri build --target aarch64-apple-darwin",
+    "tauri:build:linux": "tauri build --target x86_64-unknown-linux-gnu",
+    "tauri:build:all": "pnpm tauri:build:windows && pnpm tauri:build:macos && pnpm tauri:build:macos-arm && pnpm tauri:build:linux"
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
