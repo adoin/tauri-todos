@@ -839,32 +839,6 @@ pub async fn cleanup_duplicate_data(
     Ok(messages.join("；"))
 }
 
-// 保存下载的数据到本地（带事务保护）
-fn save_downloaded_data(todos: &[Value], settings: &Value, last_update: &str) -> Result<(), String> {
-    // 保存待办数据
-    let todo_data = serde_json::json!({
-        "data": todos,
-        "lastUpdate": last_update,
-        "source": "sync"
-    });
-    
-    // 注意：这里调用的是本地文件保存函数，它们本身不涉及数据库事务
-    // 但我们需要确保两个文件保存操作要么都成功，要么都失败
-    match save_todos(todo_data) {
-        Ok(_) => {
-            // 待办数据保存成功，继续保存设置数据
-            match save_app_settings(settings.clone()) {
-                Ok(_) => Ok(()),
-                Err(e) => {
-                    // 设置数据保存失败，尝试回滚待办数据
-                    // 注意：这里无法真正回滚，只能记录错误
-                    Err(format!("保存设置数据失败: {}，待办数据已保存", e))
-                }
-            }
-        }
-        Err(e) => Err(format!("保存待办数据失败: {}", e))
-    }
-}
 
 // 开始数据库同步（智能同步逻辑）
 #[tauri::command]
