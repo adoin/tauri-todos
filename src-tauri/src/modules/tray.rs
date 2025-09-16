@@ -75,7 +75,7 @@ pub fn setup_tray(app: &tauri::App) -> Result<(), Box<dyn std::error::Error>> {
                             if let Ok(hwnd) = window.hwnd() {
                                 unsafe {
                                     // 使用 Windows API 设置窗口层级
-                                    let hwnd_ptr = hwnd as *mut c_void;
+                                    let hwnd_ptr = hwnd.0 as *mut c_void;
                                     let user32 =
                                         libloading::Library::new("user32.dll").unwrap();
                                     let set_window_pos: libloading::Symbol<
@@ -142,7 +142,7 @@ pub fn setup_window_layer(window: &tauri::WebviewWindow) {
     use std::ffi::c_void;
     if let Ok(hwnd) = window.hwnd() {
         unsafe {
-            let hwnd_ptr = hwnd as *mut c_void;
+            let hwnd_ptr = hwnd.0 as *mut c_void;
             let user32 = libloading::Library::new("user32.dll").unwrap();
             let set_window_pos: libloading::Symbol<
                 unsafe extern "system" fn(

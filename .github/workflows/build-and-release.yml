@@ -100,8 +100,9 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          key: ${{ runner.os }}-${{ matrix.arch }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
           restore-keys: |
+            ${{ runner.os }}-${{ matrix.arch }}-pnpm-store-
             ${{ runner.os }}-pnpm-store-
 
       - name: Install dependencies
@@ -153,22 +154,53 @@ jobs:
         run: |
           echo "Setting up Rust toolchain for ${{ matrix.platform }}..."
 
-      - name: Cache Rust target
+      - name: Cache Rust dependencies
         uses: actions/cache@v4
         with:
-          path: src-tauri/target/
-          key: ${{ runner.os }}-cargo-target-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-${{ matrix.arch }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
-            ${{ runner.os }}-cargo-target-${{ matrix.target }}-
-            ${{ runner.os }}-cargo-target-
+            ${{ runner.os }}-${{ matrix.arch }}-cargo-registry-
+            ${{ runner.os }}-cargo-registry-
+
+      - name: Cache Tauri CLI
+        uses: actions/cache@v4
+        with:
+          path: ~/.cargo/bin/tauri
+          key: ${{ runner.os }}-${{ matrix.arch }}-tauri-cli-v2.0
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.arch }}-tauri-cli-
+            ${{ runner.os }}-tauri-cli-
 
       - name: Install Tauri CLI
         shell: bash
         run: |
-          echo "Installing Tauri CLI for ${{ matrix.platform }}..."
-          cargo install tauri-cli --version "^2.0" --locked --force
-          echo "Verifying Tauri CLI installation..."
-          cargo tauri --version
+          if command -v tauri &> /dev/null || command -v cargo-tauri &> /dev/null; then
+            echo "Tauri CLI found in cache:"
+            if command -v tauri &> /dev/null; then
+              tauri --version
+            else
+              cargo tauri --version
+            fi
+          else
+            echo "Installing Tauri CLI for ${{ matrix.platform }}..."
+            cargo install tauri-cli --version "^2.0" --locked --force
+            echo "Verifying Tauri CLI installation..."
+            cargo tauri --version
+          fi
+
+      - name: Cache Rust target
+        uses: actions/cache@v4
+        with:
+          path: src-tauri/target/
+          key: ${{ runner.os }}-${{ matrix.arch }}-cargo-target-${{ matrix.target }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-${{ matrix.arch }}-cargo-target-${{ matrix.target }}-
+            ${{ runner.os }}-cargo-target-${{ matrix.target }}-
+            ${{ runner.os }}-cargo-target-
 
       - name: Build Tauri app
         run: pnpm tauri build ${{ matrix.args }}

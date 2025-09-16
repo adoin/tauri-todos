@@ -1,7 +1,7 @@
 {
   "name": "Ton",
   "type": "module",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "private": true,
   "scripts": {
     "dev": "vite",
