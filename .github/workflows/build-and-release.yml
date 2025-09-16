@@ -109,6 +109,7 @@ jobs:
             ${{ runner.os }}-tauri-cli-
 
       - name: Install Tauri CLI (cached)
+        shell: bash
         run: |
           # 检查 Tauri CLI 是否已安装且版本正确
           if command -v tauri &> /dev/null; then
@@ -248,6 +249,7 @@ jobs:
             ${{ runner.os }}-cargo-target-
 
       - name: Verify Tauri CLI
+        shell: bash
         run: |
           if command -v tauri &> /dev/null; then
             echo "Tauri CLI found:"
