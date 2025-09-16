@@ -1,7 +1,7 @@
 <script setup lang="ts">
+import type { FormRules } from 'element-plus'
 import { ElButton, ElColorPicker, ElDialog, ElForm, ElFormItem, ElInput, ElMessage, ElMessageBox, ElOption, ElSelect, ElSwitch } from 'element-plus'
 import { ref } from 'vue'
-import type { FormInstance, FormRules } from 'element-plus'
 import { useAppStore } from '../store/app'
 import { useTodoStore } from '../store/todo'
 import DatabaseConfigModal from './DatabaseConfigModal.vue'
@@ -11,9 +11,6 @@ const todoStore = useTodoStore()
 
 // 数据库配置模态框状态
 const isDatabaseConfigOpen = ref(false)
-
-// 表单引用
-const formRef = ref<FormInstance>()
 
 // 自动同步验证规则
 const autoSyncRules: FormRules = {
@@ -314,8 +311,8 @@ async function updateAutoSync(value: string) {
             <ElInput
               v-model="appStore.appSettings.autoSync"
               placeholder="0 (不自动同步) 或 15m (15分钟) 或 1h (1小时)"
-              @blur="() => updateAutoSync(appStore.appSettings.autoSync || '0')"
               clearable
+              @blur="() => updateAutoSync(appStore.appSettings.autoSync || '0')"
             >
               <template #append>
                 <span class="text-xs text-gray-500">

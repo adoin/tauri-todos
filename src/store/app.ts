@@ -1,5 +1,12 @@
 import type { LocaleKey } from '../constants/locale'
 import type { AppSettings, WindowConfig } from '../types/app'
+import { invoke } from '@tauri-apps/api/core'
+import { defineStore } from 'pinia'
+import { computed, ref } from 'vue'
+import { debounce } from 'xe-utils'
+import { defaultLocale } from '../constants/locale'
+import { defaultAppSettings } from '../constants/todo'
+import { useSyncStore } from './sync'
 
 // 全局通知类型
 export interface GlobalNotification {
@@ -9,13 +16,6 @@ export interface GlobalNotification {
   timestamp: string
   duration?: number // 显示时长（毫秒），0表示不自动消失
 }
-import { invoke } from '@tauri-apps/api/core'
-import { defineStore } from 'pinia'
-import { computed, ref } from 'vue'
-import { debounce } from 'xe-utils'
-import { defaultLocale } from '../constants/locale'
-import { defaultAppSettings } from '../constants/todo'
-import { useSyncStore } from './sync'
 
 export const useAppStore = defineStore('app', () => {
   const isSettingsOpen = ref(false)
@@ -23,7 +23,7 @@ export const useAppStore = defineStore('app', () => {
   const syncStore = useSyncStore()
   // 待办事项设置
   const appSettings = ref<AppSettings>({ ...defaultAppSettings })
-  
+
   // 全局通知状态
   const globalNotifications = ref<GlobalNotification[]>([])
   const currentNotification = ref<GlobalNotification | null>(null)
@@ -38,7 +38,7 @@ export const useAppStore = defineStore('app', () => {
     try {
       await invoke('save_app_settings', { settings: { ...appSettings.value, lastUpdate: new Date().toISOString() } })
       // 如果启用了自动同步，立即同步设置
-      if (syncStore.autoSyncEnabled && syncStore.isSyncAvailable) {
+      if (syncStore.isAutoSyncEnabled && syncStore.isSyncAvailable) {
         try {
           await syncStore.startSync()
         }
@@ -119,7 +119,7 @@ export const useAppStore = defineStore('app', () => {
 
     // 添加到通知列表
     globalNotifications.value.push(notification)
-    
+
     // 设置为当前通知
     currentNotification.value = notification
 
@@ -136,7 +136,7 @@ export const useAppStore = defineStore('app', () => {
     if (index > -1) {
       globalNotifications.value.splice(index, 1)
     }
-    
+
     // 如果移除的是当前通知，清除当前通知
     if (currentNotification.value?.id === id) {
       currentNotification.value = null
