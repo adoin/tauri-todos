@@ -209,7 +209,7 @@ watch(() => props.modelValue, (newVal) => {
 <template>
   <ElDialog
     v-model="visible"
-    title="数据库同步配置"
+    title="数据库配置"
     width="500px"
     :close-on-click-modal="false"
     @close="handleClose"

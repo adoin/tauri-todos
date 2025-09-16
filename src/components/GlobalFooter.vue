@@ -2,12 +2,38 @@
 import type { GlobalNotification } from '../store/app'
 import { computed } from 'vue'
 import { useAppStore } from '../store/app'
+import { useSyncStore } from '../store/sync'
 
 const appStore = useAppStore()
+const syncStore = useSyncStore()
 
 // 计算属性
 const hasNotification = computed(() => appStore.currentNotification !== null)
 const notification = computed(() => appStore.currentNotification)
+
+// 数据库连接状态
+const dbConnectionStatus = computed(() => {
+  switch (syncStore.connectionStatus) {
+    case 'connected':
+      return { text: '数据库已连接', color: 'bg-green-400', icon: '✓' }
+    case 'checking':
+      return { text: '检查连接中...', color: 'bg-yellow-400', icon: '⏳' }
+    case 'failed':
+      return { text: '数据库连接失败', color: 'bg-red-400', icon: '✗' }
+    case 'no-config':
+      return { text: '未配置数据库', color: 'bg-gray-400', icon: '○' }
+    default:
+      return { text: '未知状态', color: 'bg-gray-400', icon: '?' }
+  }
+})
+
+// 自动同步状态
+const autoSyncStatus = computed(() => {
+  if (syncStore.isAutoSyncEnabled && syncStore.autoSyncInterval > 0) {
+    return `自动同步: ${syncStore.formatAutoSyncInterval(syncStore.autoSyncInterval)}`
+  }
+  return '自动同步: 已禁用'
+})
 
 // 格式化时间显示
 function formatTime(timestamp: string): string {
@@ -128,11 +154,11 @@ function closeNotification() {
         <div class="flex items-center gap-4">
           <span>待办事项管理</span>
           <span>•</span>
-          <span>数据同步已就绪</span>
+          <span>{{ autoSyncStatus }}</span>
         </div>
         <div class="flex items-center gap-2">
-          <div class="w-2 h-2 bg-green-400 rounded-full"></div>
-          <span>系统正常</span>
+          <div class="w-2 h-2 rounded-full" :class="dbConnectionStatus.color"></div>
+          <span>{{ dbConnectionStatus.text }}</span>
         </div>
       </div>
     </div>
