@@ -103,7 +103,9 @@ jobs:
       - name: Cache Tauri CLI specifically
         uses: actions/cache@v4
         with:
-          path: ~/.cargo/bin/tauri
+          path: |
+            ~/.cargo/bin/tauri
+            ~/.cargo/bin/cargo-tauri
           key: ${{ runner.os }}-tauri-cli-v2.0
           restore-keys: |
             ${{ runner.os }}-tauri-cli-
@@ -112,12 +114,16 @@ jobs:
         shell: bash
         run: |
           # 检查 Tauri CLI 是否已安装且版本正确
-          if command -v tauri &> /dev/null; then
+          if command -v tauri &> /dev/null || command -v cargo-tauri &> /dev/null; then
             echo "Tauri CLI already installed, checking version..."
-            tauri --version
+            if command -v tauri &> /dev/null; then
+              tauri --version
+            else
+              cargo tauri --version
+            fi
           else
             echo "Installing Tauri CLI..."
-            cargo install tauri-cli --version "^2.0" --locked
+            cargo install tauri-cli --version "^2.0" --locked --force
           fi
 
       - name: Build frontend
@@ -251,12 +257,16 @@ jobs:
       - name: Verify Tauri CLI
         shell: bash
         run: |
-          if command -v tauri &> /dev/null; then
+          if command -v tauri &> /dev/null || command -v cargo-tauri &> /dev/null; then
             echo "Tauri CLI found:"
-            tauri --version
+            if command -v tauri &> /dev/null; then
+              tauri --version
+            else
+              cargo tauri --version
+            fi
           else
             echo "Tauri CLI not found, installing..."
-            cargo install tauri-cli --version "^2.0" --locked
+            cargo install tauri-cli --version "^2.0" --locked --force
           fi
 
       - name: Build Tauri app
