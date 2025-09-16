@@ -1,4 +1,5 @@
 use serde_json::Value;
+use chrono;
 
 /// 保存应用设置
 #[tauri::command]
@@ -12,7 +13,15 @@ pub fn save_app_settings(settings: Value) -> Result<(), String> {
         .map_err(|e| format!("Failed to create config directory: {}", e))?;
 
     let config_file = config_dir.join("settings.json");
-    let json_str = serde_json::to_string_pretty(&settings)
+    
+    // 添加 lastUpdate 字段
+    let mut settings_with_timestamp = settings;
+    if let Some(settings_obj) = settings_with_timestamp.as_object_mut() {
+        let current_time = chrono::Utc::now().to_rfc3339();
+        settings_obj.insert("lastUpdate".to_string(), serde_json::Value::String(current_time));
+    }
+    
+    let json_str = serde_json::to_string_pretty(&settings_with_timestamp)
         .map_err(|e| format!("Failed to serialize settings: {}", e))?;
 
     std::fs::write(config_file, json_str)

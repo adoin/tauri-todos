@@ -198,7 +198,6 @@ export const useSyncStore = defineStore('sync', () => {
     // 启动计时器
     autoSyncTimer = window.setInterval(async () => {
       if (connectionStatus.value === 'connected' && !syncStatus.value.isSyncing) {
-        console.log('执行自动同步...')
         await performAutoSync()
 
         // 更新下次同步时间
@@ -207,7 +206,6 @@ export const useSyncStore = defineStore('sync', () => {
       }
     }, interval)
 
-    console.log(`自动同步已启动，间隔: ${formatAutoSyncInterval(interval)}`)
     appStore.showInfo(`自动同步已启动，间隔: ${formatAutoSyncInterval(interval)}`)
   }
 
@@ -219,18 +217,14 @@ export const useSyncStore = defineStore('sync', () => {
     }
 
     nextAutoSyncTime.value = ''
-    console.log('自动同步已停止')
   }
 
   // 执行自动同步
   async function performAutoSync() {
     try {
-      console.log('开始自动同步...')
-
       // 重新建立连接以确保连接有效
       const config = await loadDatabaseConfig()
       if (!config) {
-        console.warn('自动同步失败：数据库配置不存在')
         return
       }
 
@@ -240,13 +234,11 @@ export const useSyncStore = defineStore('sync', () => {
       const result = await startSync()
 
       if (result.success) {
-        console.log('自动同步成功:', result.message)
         appStore.showSuccess('自动同步成功')
         // 重新加载本地数据
         await todoStore.loadTodos()
       }
       else {
-        console.warn('自动同步失败:', result.message)
         appStore.showError(`自动同步失败: ${result.message}`)
       }
     }
@@ -265,7 +257,6 @@ export const useSyncStore = defineStore('sync', () => {
           // 设置自动同步间隔，但不立即启动
           autoSyncInterval.value = interval
           isAutoSyncEnabled.value = true
-          console.log(`自动同步配置已加载，间隔: ${formatAutoSyncInterval(interval)}`)
 
           // 如果当前已连接，立即启动
           if (connectionStatus.value === 'connected') {
@@ -282,14 +273,12 @@ export const useSyncStore = defineStore('sync', () => {
   // 程序启动时自动连接数据库
   async function initializeDatabaseConnection() {
     try {
-      console.log('程序启动：检查数据库连接...')
       connectionStatus.value = 'checking'
 
       // 1. 检查是否有数据库配置
       const config = await loadDatabaseConfig()
       if (!config) {
         connectionStatus.value = 'no-config'
-        console.log('未配置数据库连接')
         return
       }
 
@@ -297,7 +286,6 @@ export const useSyncStore = defineStore('sync', () => {
       const isConnected = await testConnection(config)
       if (!isConnected) {
         connectionStatus.value = 'failed'
-        console.log('数据库连接失败')
         return
       }
 
@@ -306,7 +294,6 @@ export const useSyncStore = defineStore('sync', () => {
       await checkAndInitializeTables()
 
       connectionStatus.value = 'connected'
-      console.log('数据库连接成功')
 
       // 4. 初始化自动同步
       await initializeAutoSync()
@@ -333,8 +320,6 @@ export const useSyncStore = defineStore('sync', () => {
 
   // 处理自动同步配置变化（供 App.vue 调用）
   function handleAutoSyncConfigChange(newAutoSync: string | undefined, oldAutoSync: string | undefined) {
-    console.log('自动同步配置变化:', newAutoSync)
-
     // 如果配置没有实际变化，跳过处理
     if (newAutoSync === oldAutoSync) {
       return
@@ -367,14 +352,12 @@ export const useSyncStore = defineStore('sync', () => {
         // 设置为0，禁用自动同步
         autoSyncInterval.value = 0
         isAutoSyncEnabled.value = false
-        console.log('自动同步已禁用')
       }
     }
     else {
       // 配置为空，禁用自动同步
       autoSyncInterval.value = 0
       isAutoSyncEnabled.value = false
-      console.log('自动同步已禁用')
     }
   }
 

@@ -879,80 +879,85 @@ pub async fn start_database_sync(
     let local_todos = load_todos()?;
     let local_settings = load_app_settings()?;
     let default_time = chrono::Utc::now().to_rfc3339();
-    let local_last_update = local_todos.get("lastUpdate")
+    
+    // 获取本地待办事项的 lastUpdate
+    let local_todos_last_update = local_todos.get("lastUpdate")
         .and_then(|v| v.as_str())
         .unwrap_or(&default_time);
     
-    // 检查远程是否有 lastUpdate 字段
-    let remote_last_update_query = "SELECT field_value FROM todo_settings_sync WHERE field_name = 'lastUpdate' LIMIT 1";
-    let remote_last_update = match sqlx::query(remote_last_update_query)
+    // 获取本地设置的 lastUpdate（如果存在）
+    let local_settings_last_update = local_settings.get("lastUpdate")
+        .and_then(|v| v.as_str())
+        .unwrap_or(&default_time);
+    
+    // 检查远程待办事项的 lastUpdate
+    let remote_todos_last_update_query = "SELECT MAX(last_update) as last_update FROM todo_items_sync";
+    let remote_todos_last_update = match sqlx::query(remote_todos_last_update_query)
         .fetch_optional(pool)
         .await
-        .map_err(|e| format!("查询远程lastUpdate失败: {}", e))?
+        .map_err(|e| format!("查询远程待办事项lastUpdate失败: {}", e))?
+    {
+        Some(row) => {
+            let value: Option<String> = row.get("last_update");
+            value
+        }
+        None => None, // 远程没有待办事项数据
+    };
+    
+    // 检查远程设置的 lastUpdate
+    let remote_settings_last_update_query = "SELECT field_value FROM todo_settings_sync WHERE field_name = 'lastUpdate' LIMIT 1";
+    let remote_settings_last_update = match sqlx::query(remote_settings_last_update_query)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| format!("查询远程设置lastUpdate失败: {}", e))?
     {
         Some(row) => {
             let value: String = row.get("field_value");
             // 去掉JSON字符串的引号
             Some(value.trim_matches('"').to_string())
         }
-        None => None, // 远程没有数据
+        None => None, // 远程没有设置数据
     };
     
-    let mut synced_items = 0;
-    let remote_last_update_str = remote_last_update.clone().unwrap_or_else(|| "无远程数据".to_string());
-    let message = match remote_last_update {
-        Some(remote_time_str) => {
-            // 远程有数据，比较时间戳决定同步方向
-            let local_time = chrono::DateTime::parse_from_rfc3339(local_last_update)
-                .map_err(|e| format!("解析本地时间失败: {}", e))?;
-            let remote_time = chrono::DateTime::parse_from_rfc3339(&remote_time_str)
-                .map_err(|e| format!("解析远程时间失败: {}", e))?;
-            
-            if local_time > remote_time {
-                // 本地较新，上传到远程
-                let settings_count = sync_settings_data(pool, &local_settings, local_last_update).await?;
-                let empty_vec = vec![];
-                let todos_data = local_todos.get("data")
-                    .and_then(|v| v.as_array())
-                    .unwrap_or(&empty_vec);
-                let todos_count = sync_todos_data(pool, todos_data, local_last_update).await?;
-                
-                synced_items = settings_count + todos_count;
-                format!("同步成功，已上传 {} 项数据到远程（本地数据较新）", synced_items)
-            } else if remote_time > local_time {
-                // 远程较新，从远程下载
-                let remote_settings = download_settings_data(pool).await?;
-                let remote_todos = download_todos_data(pool).await?;
-                
-                // 保存到本地
-                save_downloaded_data(&remote_todos, &remote_settings, &remote_time_str)?;
-                
-                synced_items = remote_todos.len() + remote_settings.as_object().map_or(0, |obj| obj.len());
-                format!("同步成功，已从远程下载 {} 项数据（远程数据较新）", synced_items)
-            } else {
-                "数据已是最新版本，无需同步".to_string()
-            }
-        }
-        None => {
-            // 远程没有数据，直接上传本地数据（首次同步）
-            let settings_count = sync_settings_data(pool, &local_settings, local_last_update).await?;
-            let empty_vec = vec![];
-            let todos_data = local_todos.get("data")
-                .and_then(|v| v.as_array())
-                .unwrap_or(&empty_vec);
-            let todos_count = sync_todos_data(pool, todos_data, local_last_update).await?;
-            
-            synced_items = settings_count + todos_count;
-            format!("首次同步成功，已上传 {} 项数据到远程", synced_items)
-        }
+    let mut sync_messages = Vec::new();
+    
+    // 分别处理待办事项和设置的同步
+    let (todos_synced, todos_message) = sync_todos_with_separate_time(
+        pool, 
+        &local_todos, 
+        local_todos_last_update, 
+        remote_todos_last_update.as_deref()
+    ).await?;
+    
+    let (settings_synced, settings_message) = sync_settings_with_separate_time(
+        pool, 
+        &local_settings, 
+        local_settings_last_update, 
+        remote_settings_last_update.as_deref()
+    ).await?;
+    
+    let synced_items = todos_synced + settings_synced;
+    
+    // 组合同步消息
+    if !todos_message.is_empty() {
+        sync_messages.push(todos_message);
+    }
+    if !settings_message.is_empty() {
+        sync_messages.push(settings_message);
+    }
+    
+    let message = if sync_messages.is_empty() {
+        "数据已是最新版本，无需同步".to_string()
+    } else {
+        format!("同步完成，共处理 {} 项数据。{}", synced_items, sync_messages.join(" "))
     };
     
     Ok(SyncResult {
         success: true,
         message,
         data: Some(SyncData {
-            local_last_update: local_last_update.to_string(),
-            remote_last_update: remote_last_update_str,
+            local_last_update: local_todos_last_update.to_string(),
+            remote_last_update: remote_todos_last_update.unwrap_or_else(|| "无远程数据".to_string()),
             synced_items,
         }),
     })
@@ -1169,4 +1174,84 @@ pub async fn get_deleted_todos(
     }
     
     Ok(todos)
+}
+
+// 分离时间同步：待办事项
+async fn sync_todos_with_separate_time(
+    pool: &MySqlPool,
+    local_todos: &Value,
+    local_last_update: &str,
+    remote_last_update: Option<&str>
+) -> Result<(usize, String), String> {
+    let empty_vec = vec![];
+    let todos_data = local_todos.get("data")
+        .and_then(|v| v.as_array())
+        .unwrap_or(&empty_vec);
+    
+    // 比较时间戳决定同步方向
+    let should_upload = if let Some(remote_time_str) = remote_last_update {
+        // 远程有数据，比较时间戳
+        match (chrono::DateTime::parse_from_rfc3339(local_last_update), 
+               chrono::DateTime::parse_from_rfc3339(remote_time_str)) {
+            (Ok(local_time), Ok(remote_time)) => local_time > remote_time,
+            _ => true, // 解析失败时默认上传本地数据
+        }
+    } else {
+        // 远程没有数据，直接上传本地数据
+        true
+    };
+    
+    if should_upload {
+        // 上传本地待办事项到远程
+        let todos_count = sync_todos_data(pool, todos_data, local_last_update).await?;
+        Ok((todos_count, format!("待办事项: 已上传 {} 项到远程", todos_count)))
+    } else {
+        // 从远程下载待办事项到本地
+        let remote_todos = download_todos_data(pool).await?;
+        
+        // 保存到本地
+        let mut local_todos_obj = local_todos.as_object().unwrap().clone();
+        local_todos_obj.insert("data".to_string(), Value::Array(remote_todos.clone()));
+        local_todos_obj.insert("lastUpdate".to_string(), Value::String(remote_last_update.unwrap().to_string()));
+        
+        let updated_todos = Value::Object(local_todos_obj);
+        save_todos(updated_todos)?;
+        
+        Ok((remote_todos.len(), format!("待办事项: 已从远程下载 {} 项", remote_todos.len())))
+    }
+}
+
+// 分离时间同步：设置
+async fn sync_settings_with_separate_time(
+    pool: &MySqlPool,
+    local_settings: &Value,
+    local_last_update: &str,
+    remote_last_update: Option<&str>
+) -> Result<(usize, String), String> {
+    // 比较时间戳决定同步方向
+    let should_upload = if let Some(remote_time_str) = remote_last_update {
+        // 远程有数据，比较时间戳
+        match (chrono::DateTime::parse_from_rfc3339(local_last_update), 
+               chrono::DateTime::parse_from_rfc3339(remote_time_str)) {
+            (Ok(local_time), Ok(remote_time)) => local_time > remote_time,
+            _ => true, // 解析失败时默认上传本地数据
+        }
+    } else {
+        // 远程没有数据，直接上传本地数据
+        true
+    };
+    
+    if should_upload {
+        // 上传本地设置到远程
+        let settings_count = sync_settings_data(pool, local_settings, local_last_update).await?;
+        Ok((settings_count, format!("设置: 已上传 {} 项到远程", settings_count)))
+    } else {
+        // 从远程下载设置到本地
+        let remote_settings = download_settings_data(pool).await?;
+        let settings_count = remote_settings.as_object().map_or(0, |obj| obj.len());
+        
+        // 保存到本地
+        save_app_settings(remote_settings)?;
+        Ok((settings_count, format!("设置: 已从远程下载 {} 项", settings_count)))
+    }
 }

@@ -140,7 +140,6 @@ function openDatabaseConfig() {
 }
 
 function onSyncCompleted(result: any) {
-  console.log('同步完成:', result)
   if (result.success) {
     // 关闭同步配置的弹窗
     isDatabaseConfigOpen.value = false

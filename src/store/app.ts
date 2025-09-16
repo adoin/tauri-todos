@@ -41,7 +41,6 @@ export const useAppStore = defineStore('app', () => {
       if (syncStore.autoSyncEnabled && syncStore.isSyncAvailable) {
         try {
           await syncStore.startSync()
-          console.log('设置保存后自动同步完成')
         }
         catch (error) {
           console.error('设置保存后自动同步失败:', error)

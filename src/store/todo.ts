@@ -303,8 +303,6 @@ export const useTodoStore = defineStore('todo', () => {
       todos.value.source = 'manual'
 
       await saveTodos()
-
-      console.log(`已归档 ${completedTodos.length} 个待办事项`)
     }
     catch (err) {
       console.error('归档失败:', err)
@@ -337,8 +335,6 @@ export const useTodoStore = defineStore('todo', () => {
   // 导出待办数据
   const exportTodos = async () => {
     try {
-      console.log('开始导出待办数据...')
-
       const exportData = {
         todos: todos.value.data,
         exportedAt: new Date().toISOString(),
@@ -346,17 +342,14 @@ export const useTodoStore = defineStore('todo', () => {
       }
 
       const dataStr = JSON.stringify(exportData, null, 2)
-      console.log('数据准备完成，大小:', dataStr.length, '字符')
 
       // 生成默认文件名（包含日期时间）
       const now = new Date()
       const dateStr = now.toISOString().split('T')[0] // YYYY-MM-DD
       const timeStr = now.toTimeString().split(' ')[0].replace(/:/g, '-') // HH-MM-SS
       const defaultFileName = `todos-backup-${dateStr}-${timeStr}.json`
-      console.log('默认文件名:', defaultFileName)
 
       // 使用Tauri的save dialog
-      console.log('打开保存对话框...')
       const filePath = await save({
         defaultPath: defaultFileName,
         filters: [
@@ -367,19 +360,14 @@ export const useTodoStore = defineStore('todo', () => {
         ],
       })
 
-      console.log('用户选择的文件路径:', filePath)
-
       if (filePath) {
-        console.log('开始写入文件到:', filePath)
         // 使用Tauri的fs插件写入文件
         const encoder = new TextEncoder()
         const dataBytes = encoder.encode(dataStr)
         await writeFile(filePath, dataBytes)
-        console.log('文件写入成功')
         ElMessage.success(`待办数据导出成功: ${filePath}`)
       }
       else {
-        console.log('用户取消了保存')
         ElMessage.info('导出已取消')
       }
     }
@@ -448,7 +436,7 @@ export const useTodoStore = defineStore('todo', () => {
 
   // 自动同步方法
   const scheduleAutoSync = () => {
-    if (!syncStore.autoSyncEnabled || !syncStore.isSyncAvailable) {
+    if (!syncStore.isAutoSyncEnabled || !syncStore.isSyncAvailable) {
       return
     }
 
@@ -461,7 +449,6 @@ export const useTodoStore = defineStore('todo', () => {
     syncTimeout = setTimeout(async () => {
       try {
         await syncStore.startSync()
-        console.log('自动同步完成')
       }
       catch (error) {
         console.error('自动同步失败:', error)
